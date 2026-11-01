@@ -122,6 +122,23 @@ form.search input{flex:1;min-width:0;border:0;background:none;color:var(--ink);f
 .menu form{display:flex;gap:4px;padding:4px}
 .menu input{flex:1;min-width:0;font:inherit;border:1px solid var(--line);border-radius:5px;background:var(--bg);color:var(--ink);padding:4px 8px}
 .btn.skip{padding:6px 9px}
+/* ---- save audio (S1, Monkey's pick 2026-11-01, mockups/save-audio-options.html) ---- */
+.btn.save{position:relative}
+.btn.save.run{color:var(--hl,var(--ink))}
+.btn.save.run::after{content:"";position:absolute;inset:-1px;border-radius:5px;border:2px solid transparent;border-top-color:var(--hl,var(--btn));border-right-color:var(--hl,var(--btn));pointer-events:none}
+.btn.save.ok{color:var(--gt);border-color:color-mix(in srgb,var(--gt) 40%,var(--line))}
+.sv{color:var(--gt)}
+.sv.run{color:var(--hl,var(--ink2))}
+.menu.audio{width:270px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.menu.audio .mh{padding:0}
+.menu.audio .seg{margin-top:0}
+.menu.audio .path{font:11.5px "Geist Mono",ui-monospace,monospace;color:var(--ink2);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 8px;display:flex;gap:6px;align-items:center}
+.menu.audio .path span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
+.menu.audio .path button{background:none;border:0;color:var(--ink);font:inherit;cursor:pointer;padding:0}
+.menu.audio .acts{display:flex;gap:6px;justify-content:flex-end}
+.menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+.msg .meter{display:inline-block;width:90px;height:4px;border-radius:2px;background:var(--line);overflow:hidden;vertical-align:middle;margin-left:10px}
+.msg .meter i{display:block;height:100%;background:var(--hl,var(--btn))}
 /* folded mini in a playlist: the bars and "1 / 3" already say it's playing, so the
    label gives its room to the title (it was squeezed to "LGTM (Loo…") */
 body.mini.queue .meta .tag{display:none!important}
@@ -227,6 +244,8 @@ body.app .hide-app{display:none!important}
   <symbol id="i-unfold" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
   <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 17v5M5 17h14l-2-4V5H7v8z"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+  <symbol id="i-ok" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
 </svg>
 <div class="fade top" id="rp-fade-top" hidden></div><div class="fade bottom" id="rp-fade-bottom" hidden></div>
 <button class="more" id="rp-more" hidden>more &#8595;</button>
@@ -286,6 +305,7 @@ body.app .hide-app{display:none!important}
       <div class="meta">
         <div class="t"><b id="rp-title">Nothing playing</b><small id="rp-sub">&nbsp;</small></div>
         <span class="tag n" id="rp-state">idle</span>
+        <button class="btn q sm yt save" id="rp-save" title="Save audio" hidden><svg class="i"><use href="#i-dl"/></svg></button>
         <a class="btn q sm yt" id="rp-yt" target="_blank" rel="noopener" title="Open on YouTube" hidden><svg class="i"><use href="#i-ext"/></svg></a>
         <button class="btn q skip" id="rp-prev" title="Previous song" hidden><svg class="i"><use href="#i-prev"/></svg></button>
         <button class="btn q" id="rp-pp" title="Play / pause (K)" disabled><svg class="i"><use href="#i-play"/></svg></button>
@@ -406,7 +426,7 @@ function renderRecent() {
   }
   $("rp-recent").innerHTML = rows.slice(0, 8).map(v =>
     `<li data-id="${esc(v.id)}"><div class="th" style="background-image:url('https://i.ytimg.com/vi/${esc(v.id)}/mqdefault.jpg')"></div>` +
-    `<div><b title="${esc(v.title || v.id)}">${esc(v.title || v.id)}</b><small>${esc([v.channel, v.last ? day(v.last) : "now"].filter(Boolean).join(" · "))}</small></div>` +
+    `<div><b title="${esc(v.title || v.id)}">${esc(v.title || v.id)}</b><small>${esc([v.channel, v.last ? day(v.last) : "now"].filter(Boolean).join(" · "))}${savedNote(v.id)}</small></div>` +
     `<span class="n">${fmtN((v.count || 0) + pendN(v.id))}</span>` +
     `<button class="add" data-add="${esc(v.id)}" title="Add to a playlist" aria-label="Add to a playlist"><svg class="i"><use href="#i-plus"/></svg></button>` +
     `<button class="del" data-del="${esc(v.id)}" title="Remove from Recent, and its loops from the total" aria-label="Remove">&#215;</button></li>`).join("");
@@ -627,6 +647,7 @@ async function play(v, t, auto = true, fromList = false) {
   showMsg("", false);
   $("rp-empty").hidden = true; $("rp-pp").disabled = false;
   $("rp-yt").hidden = false; $("rp-yt").href = `https://www.youtube.com/watch?v=${v.id}`;
+  $("rp-save").hidden = !APP; renderSaveBtn();
   showTitle(cur.title || "Loading title…");
   if (qs0().get("mini") !== "1") history.replaceState(null, "", `/repeat?v=${v.id}${APP ? "&app=1" : ""}`);
   renderAB(); renderCounts(); setState(auto ? "loading" : "ready", "n");
@@ -809,13 +830,14 @@ function renderLists() {
   box.innerHTML =
     `<div class="plhead"><button class="back" id="rp-plback">← Playlists</button></div>` +
     `<div class="plhead"><span class="nm" id="rp-plnm" title="Click to rename">${esc(p.name)}</span>` +
+    (APP && p.songs.length ? `<button class="btn q sm" id="rp-plsave" title="Save every song's audio, into its own folder">${saveAllLabel(p)}</button>` : "") +
     `<button class="btn q sm${playingHere && q.shuffle ? " on" : ""}" id="rp-plshuf" title="Play in a random order"${p.songs.length ? "" : " disabled"}><svg class="i"><use href="#i-shuffle"/></svg>Shuffle</button>` +
     `<button class="btn sm" id="rp-plplay"${p.songs.length ? "" : " disabled"}><svg class="i"><use href="#i-play"/></svg>Play</button></div>` +
     (p.songs.length ? `<ul class="list" id="rp-pl">` + p.songs.map((s, i) =>
       `<li data-id="${esc(s.id)}" data-i="${i}" draggable="true" class="${playingHere && cur && cur.id === s.id ? "now" : ""}">` +
       `<span class="drag" title="Drag to reorder">⋮⋮</span>` +
       `<div class="th" style="background-image:url('https://i.ytimg.com/vi/${esc(s.id)}/mqdefault.jpg')"></div>` +
-      `<div><b title="${esc(s.title || s.id)}">${esc(s.title || s.id)}</b><small>${esc(s.channel || "")}</small></div>` +
+      `<div><b title="${esc(s.title || s.id)}">${esc(s.title || s.id)}</b><small>${esc(s.channel || "")}${savedNote(s.id, !s.channel)}</small></div>` +
       `<span class="n">${fmtN(lifeOf(s.id))}</span>` +
       `<button class="del" data-rm="${esc(s.id)}" title="Remove from this playlist" aria-label="Remove">&#215;</button></li>`).join("") + `</ul>`
       : `<div class="empty-note">Empty. Add songs with the <b>+</b> on Recent or search results.</div>`) +
@@ -825,6 +847,7 @@ function renderLists() {
   $("rp-plshuf").onclick = () => playList(p.id, null, true);
   $("rp-plnm").onclick = () => renameList(p);
   $("rp-pldel").onclick = () => deleteList(p);
+  if ($("rp-plsave")) $("rp-plsave").onclick = () => saveAudio(p.songs.map(s => ({id: s.id, title: s.title || ""})), p.name, p.id);
   const ul = $("rp-pl");
   if (ul) {
     ul.onclick = e => {
@@ -910,7 +933,10 @@ function addMenu(btn, v) {
   const m = $("rp-menu");
   m.innerHTML = `<div class="mh">Add to…</div>` +
     lists.map(p => `<button data-to="${esc(p.id)}" title="${esc(p.name)}">${esc(p.name)}</button>`).join("") +
-    `<form id="rp-mnew"><input id="rp-mname" maxlength="60" placeholder="New playlist"><button class="btn q sm" type="submit">Add</button></form>`;
+    `<form id="rp-mnew"><input id="rp-mname" maxlength="60" placeholder="New playlist"><button class="btn q sm" type="submit">Add</button></form>` +
+    (APP ? `<hr><button id="rp-msave">${isSaved(v.id) ? "✓ Saved: show the file" : jobOf(v.id) && jobOf(v.id).state === "saving" ? "Saving…" : "⤓ Save audio"}</button>` : "");
+  m.className = "menu";
+  if (APP) $("rp-msave").onclick = () => { closeMenu(); isSaved(v.id) ? host({cmd: "audio-show", id: v.id}) : startSave(btn, [{id: v.id, title: v.title || ""}]); };
   const r = btn.getBoundingClientRect();
   m.hidden = false;
   m.style.left = Math.max(8, Math.min(innerWidth - m.offsetWidth - 8, r.right - m.offsetWidth)) + "px";
@@ -933,6 +959,127 @@ function addMenu(btn, v) {
   };
   if (!lists.length) $("rp-mname").focus();
 }
+
+/* ======================================================================
+   Save audio (S1, Monkey's picks 2026-11-01, mockups/save-audio-options.html):
+   an icon button beside "Open on YouTube", "Save audio" in each row's + menu,
+   "Save all" in a playlist. The app does the work (AudioSaver.cs: yt-dlp +
+   ffmpeg, fetched on the first save); this page asks, then polls while
+   something is saving. Desktop app only: the phone version has nothing to
+   run yt-dlp on.
+   ====================================================================== */
+let audio = {saved: [], jobs: {}, format: "mp3", chosen: false, folder: "", busy: false, tools: null};
+let audioTimer = null, saveBatch = null;      // saveBatch = {pid, ids} while a Save all runs
+const isSaved = id => audio.saved.includes(id);
+const jobOf = id => audio.jobs[id];
+const FORMATS = {mp3: "MP3", m4a: "M4A", opus: "Opus"};
+const fmtMB = b => (b / 1048576).toFixed(1) + " MB";
+
+function savedNote(id, bare) {
+  if (!APP) return "";
+  const j = jobOf(id), sep = bare ? "" : " · ";
+  if (isSaved(id)) return `${sep}<span class="sv">✓ saved</span>`;
+  if (j && j.state === "saving") return `${sep}<span class="sv run">saving…</span>`;
+  if (j && j.state === "waiting") return `${sep}waiting`;
+  return "";
+}
+function saveAllLabel(p) {
+  const ids = p.songs.map(s => s.id);
+  if (saveBatch && saveBatch.pid === p.id) {
+    const done = saveBatch.ids.filter(id => isSaved(id) || ["done", "error"].includes((jobOf(id) || {}).state)).length;
+    if (done < saveBatch.ids.length) return `<svg class="i"><use href="#i-dl"/></svg>Save all · ${done} / ${saveBatch.ids.length}`;
+  }
+  return ids.every(isSaved) ? `<svg class="i"><use href="#i-ok"/></svg>All saved` : `<svg class="i"><use href="#i-dl"/></svg>Save all`;
+}
+
+function renderSaveBtn() {
+  const b = $("rp-save"), id = cur && cur.id, j = id && jobOf(id);
+  const run = !!j && (j.state === "saving" || j.state === "waiting"), ok = !!id && isSaved(id);
+  b.classList.toggle("run", run); b.classList.toggle("ok", ok && !run);
+  b.innerHTML = `<svg class="i"><use href="#i-${ok && !run ? "ok" : "dl"}"/></svg>`;
+  b.title = run ? (j.state === "waiting" ? "Waiting to save" : audio.tools ? audio.tools.note : `Saving · ${j.pct}%`)
+    : ok ? "Saved: click to show the file. Right-click for format and folder."
+    : "Save audio. Right-click for format and folder.";
+}
+
+function setAudio(d) {
+  const before = audio.jobs || {};
+  audio = d;
+  // say what just finished: the saved file with Show, or why it failed
+  for (const [id, j] of Object.entries(d.jobs)) {
+    const was = before[id];
+    if (!was || was.state === j.state) continue;
+    if (j.state === "done" && !(saveBatch && saveBatch.ids.includes(id) && d.busy)) {
+      showMsg(`Saved <b>${esc(j.title || id)}</b> · ${FORMATS[j.format] || j.format} · ${fmtMB(j.bytes)} <a href="#" id="rp-show">Show</a>`, false);
+      $("rp-show").onclick = e => { e.preventDefault(); host({cmd: "audio-show", id}); };
+    } else if (j.state === "error") showMsg(`Couldn't save <b>${esc(j.title || id)}</b>: ${esc(j.error)}`, true);
+  }
+  if (d.tools) showMsg(`${esc(d.tools.note)}…<span class="meter"><i style="width:${d.tools.pct}%"></i></span>`, false);
+  else if (saveBatch && d.busy) {
+    const p = listById(saveBatch.pid);
+    const done = saveBatch.ids.filter(id => isSaved(id) || ["done", "error"].includes((jobOf(id) || {}).state)).length;
+    showMsg(`Saving <b>${esc(p ? p.name : "the playlist")}</b>: ${done} of ${saveBatch.ids.length}`, false);
+  } else if (saveBatch && !d.busy) {
+    const p = listById(saveBatch.pid), fails = saveBatch.ids.filter(id => (jobOf(id) || {}).state === "error").length;
+    showMsg(`Saved <b>${esc(p ? p.name : "the playlist")}</b>${fails ? ` (${fails} couldn't be saved)` : ""}. <a href="#" id="rp-show">Open the folder</a>`, !!fails);
+    $("rp-show").onclick = e => { e.preventDefault(); host({cmd: "audio-open"}); };
+    saveBatch = null;
+  }
+  renderSaveBtn(); renderRecent();
+  if (!$("rp-lists").hidden && !$("rp-lists").querySelector("input:focus, .dragging")) renderLists();
+  clearTimeout(audioTimer);
+  if (d.busy) audioTimer = setTimeout(loadAudio, 700);
+}
+async function loadAudio() {
+  try { const r = await api("/api/audio"); if (r.ok) setAudio(await r.json()); }
+  catch (e) { /* lock notice already shown */ }
+}
+async function saveAudio(songs, sub, pid) {
+  songs = songs.filter(s => !isSaved(s.id));
+  if (!songs.length) return showMsg("Already saved.", false);
+  if (pid) saveBatch = {pid, ids: songs.map(s => s.id)};
+  try { setAudio(await post("/api/audio-save", {songs, sub: sub || ""})); }
+  catch (err) { saveBatch = null; showMsg(`Couldn't save: ${esc(err.message)}`, true); }
+}
+/* the first save asks for format and folder; after that a click just saves */
+function startSave(anchor, songs) {
+  if (!audio.chosen) return audioPicker(anchor, songs);
+  saveAudio(songs);
+}
+
+/* format and folder: right-click the button, or the first save */
+function audioPicker(anchor, songs) {
+  const m = $("rp-menu");
+  let fmt = audio.format;
+  m.className = "menu audio";
+  m.innerHTML = `<span class="k mh">Save audio as</span>` +
+    `<div class="seg" id="rp-afmt">${Object.entries(FORMATS).map(([k, n]) => `<button data-f="${k}"${k === fmt ? ' class="on"' : ""}>${n}</button>`).join("")}</div>` +
+    `<span class="k mh">To</span>` +
+    `<div class="path"><span id="rp-afolder" title="${esc(audio.folder)}">${esc(audio.folder)}</span><button id="rp-achange">Change</button></div>` +
+    `<div class="acts"><button class="btn q sm" id="rp-aopen">Open folder</button><button class="btn sm" id="rp-ago">Save</button></div>`;
+  m.querySelectorAll("[data-f]").forEach(b => b.onclick = () => {
+    fmt = b.dataset.f; m.querySelectorAll("[data-f]").forEach(x => x.classList.toggle("on", x === b)); });
+  $("rp-achange").onclick = () => host({cmd: "audio-folder"});
+  $("rp-aopen").onclick = () => host({cmd: "audio-open"});
+  $("rp-ago").onclick = async () => {
+    closeMenu();
+    try { setAudio(await post("/api/audio-format", {format: fmt})); } catch (err) { showMsg(esc(err.message), true); return; }
+    if (songs && songs.length) saveAudio(songs);
+  };
+  const r = anchor.getBoundingClientRect();
+  m.hidden = false;
+  m.style.left = Math.max(8, Math.min(innerWidth - m.offsetWidth - 8, r.right - m.offsetWidth)) + "px";
+  m.style.top = (r.bottom + 4 + m.offsetHeight > innerHeight ? Math.max(8, r.top - m.offsetHeight - 4) : r.bottom + 4) + "px";
+}
+const curSong = () => cur ? [{id: cur.id, title: cur.title || ""}] : [];
+$("rp-save").onclick = () => {
+  if (!cur) return;
+  const j = jobOf(cur.id);
+  if (j && (j.state === "saving" || j.state === "waiting")) return;
+  if (isSaved(cur.id)) return host({cmd: "audio-show", id: cur.id});
+  startSave($("rp-save"), curSong());
+};
+$("rp-save").oncontextmenu = e => { e.preventDefault(); audioPicker($("rp-save"), isSaved(cur && cur.id) ? [] : curSong()); };
 
 /* ---- compact mode: the player cell floats and drags; position kept per browser ---- */
 const card = $("card");
@@ -1132,6 +1279,14 @@ if (APP) {
     m.v.forEach((x, i) => { if (bars.children[i]) bars.children[i].style.height = Math.round(Math.max(.06, x) * 100) + "%"; loud = Math.max(loud, x); });
     bars.classList.toggle("quiet", loud < .02);
   });
+  // save audio: the folder the window's picker settled on
+  window.chrome.webview.addEventListener("message", e => {
+    const m = e.data;
+    if (!m || m.cmd !== "audio-folder") return;
+    audio.folder = m.folder;
+    if ($("rp-afolder")) { $("rp-afolder").textContent = m.folder; $("rp-afolder").title = m.folder; }
+  });
+  loadAudio();
   setPin(store.get("msRepeatPin", true));
   setFold(store.get("msRepeatFold", false));
   appMini(store.get("msRepeatAppMini", false));

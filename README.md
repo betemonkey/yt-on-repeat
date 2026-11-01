@@ -59,6 +59,21 @@ Recent, search) leaves Playlist mode; the app reopens on the playlist where it
 was. Counts are never stored in a playlist: a song's loops are the same
 whichever list played it.
 
+**Save audio (Monkey's picks, 2026-11-01, `mockups/save-audio-options.html`):**
+the download button beside "Open on YouTube" saves the song playing as an
+audio file with its title, channel and cover art (S1). The **+** menu on a
+Recent or search row has "Save audio" too, and a playlist has **Save all**, into
+its own subfolder (songs already saved are skipped). The first save asks for
+the format, MP3 (default), M4A or Opus, and the folder (`Music\On repeat`);
+right-click the button to change them later. M4A and Opus keep YouTube's own
+stream, so they're repackaged, not re-encoded. A saved song shows ✓; clicking
+it opens the folder with the file selected. The app does this with
+[yt-dlp](https://github.com/yt-dlp/yt-dlp) and ffmpeg, downloaded on the first
+save (about 115 MB, once) rather than shipped with the app; an ffmpeg already on
+PATH is used instead. yt-dlp updates itself before a save once it's a week old.
+Windows app only: the phone version has nothing to run yt-dlp on. The mini
+window has no save button.
+
 **Music bars (mini window):** 16 orange bars that follow the actual sound, like
 the Stream Deck Spotify knob (same capture and feel, ported from
 `streamdeck/spotifyviz`). Windows' per-app audio capture listens to WebView2's
@@ -131,8 +146,10 @@ from the same PC.
 | Counts, last played, recent | `%APPDATA%\RepeatDesktop\repeat-counts.json` |
 | Window positions, pin, YouTube key | `%APPDATA%\RepeatDesktop\settings.json` |
 | The page's own memory (A–B points, theme, fold) | WebView2 profile, `%LOCALAPPDATA%\RepeatDesktop\WebView2` |
+| Saved audio: which song went to which file | `%APPDATA%\RepeatDesktop\saved-audio.json` |
+| yt-dlp and ffmpeg (fetched on the first save) | `%LOCALAPPDATA%\RepeatDesktop\tools` |
 
-`REPEAT_DESKTOP_DATA=<folder>` moves all three somewhere else; the checks use it
+`REPEAT_DESKTOP_DATA=<folder>` moves all of these somewhere else; the checks use it
 so they never touch the real counts.
 
 ## Search
@@ -152,8 +169,13 @@ the key. The app checks the key with Google before saving it. Free quota is
   routes and rules the NAS version had: a loop adds a small positive step (≤ 500),
   a play adds nothing but stamps the order, the total is always the sum, and a
   damaged counts file is reported, never overwritten.
+- `AudioSaver.cs`: Save audio. Fetches yt-dlp and ffmpeg on first use, runs
+  one save at a time, reports progress to the page (`/api/audio`,
+  `/api/audio-save`, `/api/audio-format`), and remembers what was saved.
 - `MainForm.cs`: the window. The page posts `mode` / `height` / `pin` / `drag`;
-  the window changes frame, size, position and always-on-top. Heights come in
+  the window changes frame, size, position and always-on-top. For Save audio it
+  also opens the folder picker and Explorer (`audio-folder`, `audio-show`,
+  `audio-open`). Heights come in
   device pixels from the page, because WebView2 applies Windows' *Text size*
   setting on top of the screen's DPI.
 
@@ -168,10 +190,12 @@ dotnet build -c Release
 node tests/check.js
 ```
 
-Starts the app on a throwaway data folder, runs 34 checks over WebView2's
+Starts the app on a throwaway data folder, runs 38 checks over WebView2's
 DevTools port (counting rules, refused inputs, 8 parallel tabs × 25 loops, search
 without a key, a wrong key refused by Google, the key guide, oEmbed titles, a
-damaged counts file), and closes it. Needs internet for the YouTube parts.
+damaged counts file, Save audio's settings and refused inputs), and closes it.
+The checks never download the audio tools; a real save was tested by hand
+(2026-11-01: MP3 and M4A, tags and cover art, Save all into a subfolder). Needs internet for the YouTube parts.
 
 ## Design history
 
@@ -179,7 +203,7 @@ damaged counts file), and closes it. Needs internet for the YouTube parts.
 the monkey-status dashboard (open `youtube-repeat.html`; it shows layouts A–E,
 the compact card and the desktop-app plan). Layout D won. NAS addresses and paths
 in them are blanked out. `mockups/*.html` hold the later picks: scroll bar, orange
-text, music bars, header and playlists.
+text, music bars, header, playlists and Save audio.
 
 ## Security
 
@@ -196,6 +220,11 @@ Reviewed 2026-10-08; the checks cover each point.
 - **Everything from YouTube is escaped** before it's shown (titles, channels),
   as are playlist names. Video ids are checked against YouTube's 11-character
   format on both sides.
+- **Save audio's tools are checked.** yt-dlp and ffmpeg come only from yt-dlp's
+  own GitHub releases, and each download is kept only if its SHA-256 matches the
+  checksum file published with it. "Show" opens the file the app itself
+  recorded, never a path sent by the page, and a playlist's name is cleaned
+  before it becomes a folder name.
 - **Data files** are written atomically. A damaged counts or playlists file is
   reported and never overwritten.
 - **Audio capture** listens to WebView2's own process tree only, and only while

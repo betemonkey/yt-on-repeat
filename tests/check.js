@@ -207,6 +207,20 @@ const call = (ev, method, url, body) => ev(`fetch(${JSON.stringify(url)}, {metho
     check("after the last song it starts again from the first", r.wrapped.firstAgain && r.wrapped.pos === `1 / ${r.order.length}`, r.wrapped);
     check("playing one video yourself leaves Playlist mode", !r.single.listMode && !r.single.prevShown && !r.single.posShown, r.single);
 
+    // ---- save audio (2026-11-01): the parts that need no download ----
+    r = await call(s.ev, "GET", "/api/audio");
+    check("save audio starts as MP3, not chosen, nothing saved, idle",
+      r.status === 200 && r.body.format === "mp3" && r.body.chosen === false && r.body.saved.length === 0 && r.body.busy === false, r);
+    r = await call(s.ev, "POST", "/api/audio-format", {format: "wav"});
+    const fmtAfter = (await call(s.ev, "GET", "/api/audio")).body.format;
+    check("an unknown audio format is refused and changes nothing", r.status === 400 && fmtAfter === "mp3", {r, fmtAfter});
+    r = await call(s.ev, "POST", "/api/audio-save", {songs: [{id: "../../evil", title: "x"}, {id: "", title: ""}]});
+    check("bad video ids are never queued for saving", r.status === 200 && Object.keys(r.body.jobs).length === 0 && !r.body.busy, r);
+    r = await s.ev(`({shown: !$("rp-save").hidden, tip: $("rp-save").title, inMenu: (() => { $("rp-recent").querySelector("[data-add]").click();
+      const t = ($("rp-msave") || {}).textContent; closeMenu(); return t; })()})`);
+    check("the save button shows beside the video, and Save audio is in the + menu",
+      r.shown && /^Save audio/.test(r.tip) && r.inMenu === "⤓ Save audio", r);
+
     // ---- security review (2026-10-08): only the app's own page may use the API ----
     const before2 = (await call(s.ev, "GET", "/api/repeat")).body.total;
     r = await s.ev(`Promise.all([

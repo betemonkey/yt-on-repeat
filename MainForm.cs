@@ -40,7 +40,7 @@ sealed class MainForm : Form
         MinimumSize = FullMinimum();
         PlaceFull();
         Load += async (_, _) => await StartWeb();
-        FormClosing += (_, _) => { audio.Stop(); Remember(); settings.Save(); };
+        FormClosing += (_, _) => { audio.Stop(); api.Audio.Stop(); Remember(); settings.Save(); };
         barsTimer.Tick += (_, _) =>
         {
             if (!mini || web.CoreWebView2 is null) return;
@@ -167,6 +167,26 @@ sealed class MainForm : Form
             case "pin":
                 settings.Pinned = m.GetProperty("on").GetBoolean();
                 TopMost = mini && settings.Pinned;
+                break;
+            // save audio: the folder picker and Explorer are this window's job
+            case "audio-folder":
+                using (var pick = new FolderBrowserDialog { Description = "Save audio to", UseDescriptionForTitle = true,
+                           InitialDirectory = api.Audio.Folder, ShowNewFolderButton = true })
+                    if (pick.ShowDialog(this) == DialogResult.OK)
+                    {
+                        settings.AudioFolder = pick.SelectedPath;
+                        settings.Save();
+                    }
+                web.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(new { cmd = "audio-folder", folder = api.Audio.Folder }));
+                break;
+            case "audio-show":
+                // the file comes from the app's own record of saves, never from the page
+                if (m.TryGetProperty("id", out var sid) && api.Audio.FileOf(sid.GetString() ?? "") is { } f && File.Exists(f))
+                    Process.Start("explorer.exe", $"/select,\"{f}\"");
+                break;
+            case "audio-open":
+                Directory.CreateDirectory(api.Audio.Folder);
+                Process.Start(new ProcessStartInfo(api.Audio.Folder) { UseShellExecute = true });
                 break;
             case "drag" when mini:
                 // the mini window has no OS title bar: hand the mouse to Windows

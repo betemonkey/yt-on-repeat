@@ -25,6 +25,7 @@ sealed partial class RepeatApi(Settings settings, string countsFile)
     [GeneratedRegex("^[A-Za-z0-9_-]{11}$")] private static partial Regex YtId();
     public static bool IsVideoId(string s) => YtId().IsMatch(s ?? "");
     readonly Playlists lists = new(Path.Combine(Path.GetDirectoryName(countsFile)!, "playlists.json"));
+    public readonly AudioSaver Audio = new(settings);
     static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
     readonly Lock gate = new();
 
@@ -84,6 +85,18 @@ sealed partial class RepeatApi(Settings settings, string countsFile)
                     return await Search(query.GetValueOrDefault("q", "").Trim());
                 case ("POST", "/api/settings"):
                     return await SaveKey(JsonNode.Parse(body)?["ytKey"]?.GetValue<string>() ?? "");
+                // ---- save audio (AudioSaver.cs) ----
+                case ("GET", "/api/audio"):
+                    return new(200, Audio.Status().ToJsonString());
+                case ("POST", "/api/audio-format"):
+                    return new(200, Audio.SetFormat(Str(JsonNode.Parse(body)?["format"])).ToJsonString());
+                case ("POST", "/api/audio-save"):
+                {
+                    var a = JsonNode.Parse(body) as JsonObject ?? throw new ArgumentException("bad body");
+                    var songs = (a["songs"] as JsonArray ?? throw new ArgumentException("no songs"))
+                        .Select(s => (Str(s?["id"]), Clip(Str(s?["title"]), 200))).ToList();
+                    return new(200, Audio.Save(songs, Str(a["sub"])).ToJsonString());
+                }
                 default:
                     return Fail(404, "no such route");
             }

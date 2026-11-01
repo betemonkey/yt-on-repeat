@@ -11,6 +11,11 @@ sealed class Settings
     public bool Pinned { get; set; } = true;
     public int[]? Full { get; set; }          // x, y, w, h (device pixels)
     public int[]? Mini { get; set; }          // x, y
+    // Save audio: mp3 | m4a | opus, the folder ("" = Music\On repeat), and
+    // whether the picker was ever confirmed (the first save shows it)
+    public string AudioFormat { get; set; } = "mp3";
+    public string AudioFolder { get; set; } = "";
+    public bool AudioChosen { get; set; }
 
     /// <summary>REPEAT_DESKTOP_DATA moves everything (settings, counts, the
     /// browser profile) to another folder: tests/check.js runs against a
