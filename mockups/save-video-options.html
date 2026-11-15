@@ -1,0 +1,181 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Save Video Options</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+  /* On repeat, save video, 2026-11-15. Monkey: "we can use the same button that
+     suggest either mp3 or video". Static mockup in the app's current look, same
+     styles as save-audio-options.html. Nothing here is built. */
+  :root{color-scheme:dark;--bg:#1E1D1B;--card:#262523;--line:#353331;--ink:#ECEAE5;--ink2:#C4C1BA;--mut:#8E8B85;--well:#2E2C29;--hl:#E5704B;--yt:#E6C474;--g:#253226;--gt:#9CC79F;--btn:#ECEAE5}
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px 16px 64px;background:#151413;color:var(--ink);font:14px/1.55 "Helvetica Neue",-apple-system,"Segoe UI",sans-serif}
+  .wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
+  h1.page{font:500 30px/1.1 Newsreader,Georgia,serif;margin:0}
+  h2{font:500 22px/1.2 Newsreader,Georgia,serif;margin:0}
+  .lead,.note{color:var(--ink2);margin:0;max-width:900px}
+  .note{font-size:13px}
+  section{display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--line);padding-top:22px}
+  .row{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+  .k{font:11px "Geist Mono",ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
+  .tag{font:10px "Geist Mono",ui-monospace,monospace;letter-spacing:.05em;text-transform:uppercase;border-radius:999px;padding:1px 7px;background:var(--g);color:var(--gt);margin-left:6px;vertical-align:2px}
+  .cell{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card);border-radius:6px;padding:4px 10px;color:var(--ink);font-size:12.5px;white-space:nowrap}
+  .btn.p{background:var(--btn);color:var(--bg);border-color:var(--btn)}
+  .seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .seg span{flex:1;text-align:center;padding:6px 0;font-size:12.5px;color:var(--ink2)}
+  .seg span+span{border-left:1px solid var(--line)}
+  .seg .on{background:var(--btn);color:var(--bg)}
+  .col{display:flex;flex-direction:column;gap:8px;flex:1;min-width:300px}
+  .col h3{margin:0;font-size:14.5px}
+  .col p{margin:0;color:var(--ink2);font-size:12.5px}
+  .player{background:var(--card);border:1px solid var(--line);border-radius:12px;max-width:560px;position:relative}
+  .player .vid{aspect-ratio:16/6;background:linear-gradient(135deg,#3b4a3a,#6f8f6a 55%,#c9b8c8);border-radius:12px 12px 0 0}
+  .pbar{display:flex;align-items:center;gap:8px;padding:12px 16px}
+  .pbar .t{flex:1;min-width:0}
+  .pbar .t b{display:block;font:500 18px/1.25 Newsreader,Georgia,serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pbar .t small{color:var(--mut);font-size:12px}
+  .pill{font:10.5px "Geist Mono",ui-monospace,monospace;letter-spacing:.08em;color:var(--mut);background:var(--well);border-radius:999px;padding:2px 9px}
+  .ib{width:34px;height:30px;border:1px solid var(--line);border-radius:6px;display:inline-flex;align-items:center;justify-content:center;color:var(--ink);font-size:13px;position:relative;flex:none}
+  .ib.hl{border-color:var(--hl);color:var(--hl);box-shadow:0 0 0 3px rgba(229,112,75,.15)}
+  .ib.ok{color:var(--gt);border-color:#3c5a3e}
+  .ib.run{color:var(--hl)}
+  .ib.run::after{content:"";position:absolute;inset:-1px;border-radius:6px;border:2px solid transparent;border-top-color:var(--hl);border-right-color:var(--hl)}
+  .ib svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .ib .badge{position:absolute;right:-5px;bottom:-5px;font:9px/1 "Geist Mono",ui-monospace,monospace;background:var(--well);border:1px solid var(--line);border-radius:4px;padding:2px 3px;color:var(--ink2)}
+  .split{display:inline-flex;flex:none}
+  .split .ib:first-child{border-radius:6px 0 0 6px}
+  .split .car{width:18px;height:30px;border:1px solid var(--line);border-left:0;border-radius:0 6px 6px 0;display:inline-flex;align-items:center;justify-content:center;color:var(--mut);font-size:9px}
+  .split.hl .ib,.split.hl .car{border-color:var(--hl);color:var(--hl)}
+  .drop{position:absolute;right:16px;top:calc(100% - 6px);z-index:2;width:250px;border:1px solid var(--line);border-radius:10px;background:var(--well);padding:6px;font-size:12.5px;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+  .drop .it{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:center;padding:7px 8px;border-radius:6px}
+  .drop .it.f{background:rgba(229,112,75,.12)}
+  .drop .it svg{width:15px;height:15px;stroke:var(--ink2);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .drop .it small{display:block;color:var(--mut);font-size:11px}
+  .drop .it em{font:normal 10.5px "Geist Mono",ui-monospace,monospace;color:var(--mut)}
+  .drop hr{border:0;border-top:1px solid var(--line);margin:4px 2px}
+  .drop .set{padding:5px 8px;color:var(--mut);font-size:11.5px}
+  .spacer{height:150px}
+  .states{display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--ink2)}
+  .states span.l{display:inline-flex;align-items:center;gap:9px}
+  .pop{width:290px;border:1px solid var(--line);border-radius:10px;background:var(--well);padding:12px;font-size:12.5px;display:flex;flex-direction:column;gap:8px}
+  .pop .path{font:11.5px "Geist Mono",ui-monospace,monospace;color:var(--ink2);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:5px 8px;display:flex;gap:6px}
+  .pop .path span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .menu{width:210px;border:1px solid var(--line);border-radius:8px;background:var(--well);padding:6px;font-size:12.5px}
+  .menu div{padding:4px 6px}
+  .menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+  .q{border-left:3px solid var(--yt);padding-left:12px}
+  .q ul{margin:6px 0 0;padding-left:18px;color:var(--ink2);font-size:13px;display:flex;flex-direction:column;gap:5px}
+  .sv{font-size:11px;color:var(--gt)}
+  @media (max-width:520px){.pbar .pill{display:none}.drop{right:8px}}
+</style>
+<svg width="0" height="0" style="position:absolute"><defs>
+  <symbol id="dl" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+  <symbol id="ok" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="note" viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></symbol>
+  <symbol id="film" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4-2.5z"/></symbol>
+</defs></svg>
+
+<div class="wrap">
+  <div><span class="k">On repeat · save audio or video</span><h1 class="page">One save button, audio or video</h1></div>
+  <p class="lead">The download button beside "Open on YouTube" stays the only save button. It now offers <b>Audio</b> (MP3, as today) or <b>Video</b> (MP4). Video goes to its own folder, <code>Videos\On repeat</code>. It uses the same yt-dlp and ffmpeg the app already fetches, so nothing new is downloaded. Windows app only, like Save audio.</p>
+
+  <!-- ===================== V1 / V2 / V3 ===================== -->
+  <section>
+    <h2>How the button asks</h2>
+    <div class="row">
+      <div class="col"><h3>V1 · Click opens a small menu <span class="tag">my pick</span></h3>
+        <div class="player"><div class="vid"></div>
+          <div class="pbar"><div class="t"><b>Big Buck Bunny 60fps 4K - Official Blender F…</b><small>Blender · 3 loops this session</small></div>
+            <span class="pill">PLAYING</span>
+            <span class="ib hl"><svg><use href="#dl"/></svg></span>
+            <span class="ib"><svg><use href="#ext"/></svg></span>
+            <span class="ib">❚❚</span></div>
+          <div class="drop">
+            <div class="it f"><svg><use href="#note"/></svg><div>Audio<small>MP3 · Music\On repeat</small></div><em>≈4 MB</em></div>
+            <div class="it"><svg><use href="#film"/></svg><div>Video<small>MP4 · up to 1080p · Videos\On repeat</small></div><em>≈60 MB</em></div>
+            <hr><div class="set">Formats and folders…</div></div></div>
+        <div class="spacer"></div>
+        <p>Every save is two clicks, but you always see what you're getting. The sizes are rough guesses for a 4-minute song. The choice you used last is highlighted.</p>
+      </div>
+      <div class="col"><h3>V2 · Split button</h3>
+        <div class="player"><div class="vid"></div>
+          <div class="pbar"><div class="t"><b>Big Buck Bunny 60fps 4K - Official Blender F…</b><small>Blender · 3 loops this session</small></div>
+            <span class="pill">PLAYING</span>
+            <span class="split hl"><span class="ib"><svg><use href="#dl"/></svg><span class="badge">MP3</span></span><span class="car">▾</span></span>
+            <span class="ib"><svg><use href="#ext"/></svg></span>
+            <span class="ib">❚❚</span></div>
+          <div class="drop">
+            <div class="it f"><svg><use href="#note"/></svg><div>Audio<small>MP3</small></div><em>✓ default</em></div>
+            <div class="it"><svg><use href="#film"/></svg><div>Video<small>MP4 · up to 1080p</small></div><em></em></div></div></div>
+        <div class="spacer"></div>
+        <p>One click saves the kind on the little badge (MP3 or MP4). The ▾ switches it. Fastest if you mostly want one kind, but the bar gets a bit wider.</p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col"><h3>V3 · Same button, the choice lives in its settings</h3>
+        <div class="player"><div class="vid"></div>
+          <div class="pbar"><div class="t"><b>Big Buck Bunny 60fps 4K - Official Blender F…</b><small>Blender · 3 loops this session</small></div>
+            <span class="pill">PLAYING</span>
+            <span class="ib hl"><svg><use href="#dl"/></svg><span class="badge">MP4</span></span>
+            <span class="ib"><svg><use href="#ext"/></svg></span>
+            <span class="ib">❚❚</span></div></div>
+        <p>Looks like today plus a small badge. A click saves whatever is set, and you right-click to switch between audio and video. Switching often gets annoying.</p>
+      </div>
+      <div class="col"></div>
+    </div>
+    <div class="cell"><div class="k" style="margin-bottom:8px">The button's states (all three options)</div>
+      <div class="states">
+        <span class="l"><span class="ib"><svg><use href="#dl"/></svg></span>Nothing saved</span>
+        <span class="l"><span class="ib run"><svg><use href="#dl"/></svg><span class="badge">MP4</span></span>Saving video · 64% in the tooltip</span>
+        <span class="l"><span class="ib ok"><svg><use href="#ok"/></svg><span class="badge">MP3</span></span>Audio saved</span>
+        <span class="l"><span class="ib ok"><svg><use href="#ok"/></svg><span class="badge">MP4</span></span>Video saved</span>
+        <span class="l"><span class="ib ok"><svg><use href="#ok"/></svg><span class="badge">2</span></span>Both saved</span>
+      </div>
+      <p class="note" style="margin-top:8px">With something already saved, the menu still opens: the saved kind shows ✓ and "Show", and the other kind can still be saved.</p></div>
+  </section>
+
+  <!-- ===================== settings ===================== -->
+  <section>
+    <h2>Formats and folders</h2>
+    <div class="row">
+      <div class="col" style="flex:0 0 auto"><h3>"Formats and folders…" (or right-click)</h3>
+        <div class="pop">
+          <span class="k">Audio</span>
+          <div class="seg"><span class="on">MP3</span><span>M4A</span><span>Opus</span></div>
+          <div class="path"><span>C:\Users\…\Music\On repeat</span><span style="color:var(--ink)">Change</span></div>
+          <span class="k" style="margin-top:4px">Video, MP4 up to</span>
+          <div class="seg"><span>720p</span><span class="on">1080p</span><span>Best</span></div>
+          <div class="path"><span>C:\Users\…\Videos\On repeat</span><span style="color:var(--ink)">Change</span></div>
+          <div style="display:flex;gap:6px;justify-content:flex-end"><span class="btn">Open folder</span><span class="btn p">Save</span></div></div>
+      </div>
+      <div class="col"><h3>Why these choices</h3>
+        <p><b>MP4 always</b>, so it plays everywhere, including on the phone and in Jellyfin. <b>1080p</b> by default: "Best" can be 4K, which is big and sometimes isn't available as MP4, so it may come out as WebM/MKV instead.</p>
+        <p>Video is saved with title, channel and cover image, like audio. Your audio settings stay as they are today.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== rows + playlists ===================== -->
+  <section>
+    <h2>From Recent, search and playlists</h2>
+    <div class="row">
+      <div class="col"><h3>The + menu on a row</h3>
+        <div class="menu"><div style="color:var(--mut)">Add to…</div><div>Focus</div><div>Gym</div><div style="color:var(--hl)">+ New playlist</div><hr><div>⤓ Save audio</div><div>⤓ Save video</div></div>
+        <p>Two lines instead of one. A song saved either way shows <span class="sv">✓ saved</span> in the list.</p>
+      </div>
+      <div class="col"><h3>A playlist's Save all</h3>
+        <div class="menu"><div>⤓ Save all as audio</div><div>⤓ Save all as video</div></div>
+        <p>Save all opens the same choice. Each kind goes into a subfolder named after the list (<code>Music\On repeat\Focus</code>, <code>Videos\On repeat\Focus</code>), and songs already saved that way are skipped.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="q"><h3 style="margin:0;font-size:14px">To decide</h3>
+    <ul>
+      <li><b>V1, V2 or V3?</b> My pick is <b>V1</b>: it's closest to "a button that offers MP3 or video", and you never save the wrong kind by accident.</li>
+      <li><b>Default video quality?</b> My pick is <b>1080p</b> MP4: it looks good and the files stay reasonable.</li>
+      <li><b>Video folder?</b> My pick is <b>Videos\On repeat</b>, kept apart from the music.</li>
+    </ul></div>
+</div>

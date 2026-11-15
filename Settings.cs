@@ -16,6 +16,10 @@ sealed class Settings
     public string AudioFormat { get; set; } = "mp3";
     public string AudioFolder { get; set; } = "";
     public bool AudioChosen { get; set; }
+    // Save video (V1, Monkey's pick 2026-11-15, mockups/save-video-options.html):
+    // MP4 up to 720 | 1080 | best, and the folder ("" = Videos\On repeat)
+    public string VideoQuality { get; set; } = "1080";
+    public string VideoFolder { get; set; } = "";
 
     /// <summary>REPEAT_DESKTOP_DATA moves everything (settings, counts, the
     /// browser profile) to another folder: tests/check.js runs against a

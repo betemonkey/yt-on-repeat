@@ -85,17 +85,20 @@ sealed partial class RepeatApi(Settings settings, string countsFile)
                     return await Search(query.GetValueOrDefault("q", "").Trim());
                 case ("POST", "/api/settings"):
                     return await SaveKey(JsonNode.Parse(body)?["ytKey"]?.GetValue<string>() ?? "");
-                // ---- save audio (AudioSaver.cs) ----
+                // ---- save audio / video (AudioSaver.cs) ----
                 case ("GET", "/api/audio"):
                     return new(200, Audio.Status().ToJsonString());
                 case ("POST", "/api/audio-format"):
-                    return new(200, Audio.SetFormat(Str(JsonNode.Parse(body)?["format"])).ToJsonString());
+                {
+                    var f = JsonNode.Parse(body);
+                    return new(200, Audio.SetFormat(Str(f?["format"]), Str(f?["quality"])).ToJsonString());
+                }
                 case ("POST", "/api/audio-save"):
                 {
                     var a = JsonNode.Parse(body) as JsonObject ?? throw new ArgumentException("bad body");
                     var songs = (a["songs"] as JsonArray ?? throw new ArgumentException("no songs"))
                         .Select(s => (Str(s?["id"]), Clip(Str(s?["title"]), 200))).ToList();
-                    return new(200, Audio.Save(songs, Str(a["sub"])).ToJsonString());
+                    return new(200, Audio.Save(songs, Str(a["sub"]), a["kind"] is null ? "audio" : Str(a["kind"])).ToJsonString());
                 }
                 default:
                     return Fail(404, "no such route");

@@ -136,6 +136,19 @@ form.search input{flex:1;min-width:0;border:0;background:none;color:var(--ink);f
 .menu.audio .path span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
 .menu.audio .path button{background:none;border:0;color:var(--ink);font:inherit;cursor:pointer;padding:0}
 .menu.audio .acts{display:flex;gap:6px;justify-content:flex-end}
+/* save audio or video (V1, Monkey's pick 2026-11-15, mockups/save-video-options.html) */
+.btn.save .badge{position:absolute;right:-6px;bottom:-6px;font:9px/1 "Geist Mono",ui-monospace,monospace;background:var(--well);border:1px solid var(--line);border-radius:4px;padding:2px 3px;color:var(--ink2);pointer-events:none}
+.menu.savek{width:270px;max-width:none;padding:6px}
+.menu.savek > button[data-k]{display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:8px;align-items:center;white-space:normal;padding:7px 8px}
+.menu.savek > button[data-k].f{background:color-mix(in srgb,var(--hl,var(--btn)) 12%,transparent)}
+.menu.savek > button[data-k]:hover{background:var(--well)}
+.menu.savek > button[data-k]:disabled{cursor:default;opacity:.75}
+.menu.savek > button[data-k] svg{color:var(--ink2)}
+.menu.savek b{font-weight:500;display:block}
+.menu.savek small{display:block;color:var(--mut);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.menu.savek em{font:normal 10.5px "Geist Mono",ui-monospace,monospace;color:var(--mut)}
+.menu.savek .done em{color:var(--gt)}
+.menu.savek .set{color:var(--mut);font-size:12px}
 .menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
 .msg .meter{display:inline-block;width:90px;height:4px;border-radius:2px;background:var(--line);overflow:hidden;vertical-align:middle;margin-left:10px}
 .msg .meter i{display:block;height:100%;background:var(--hl,var(--btn))}
@@ -246,6 +259,8 @@ body.app .hide-app{display:none!important}
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
   <symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
   <symbol id="i-ok" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></symbol>
+  <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4-2.5z"/></symbol>
 </svg>
 <div class="fade top" id="rp-fade-top" hidden></div><div class="fade bottom" id="rp-fade-bottom" hidden></div>
 <button class="more" id="rp-more" hidden>more &#8595;</button>
@@ -305,7 +320,7 @@ body.app .hide-app{display:none!important}
       <div class="meta">
         <div class="t"><b id="rp-title">Nothing playing</b><small id="rp-sub">&nbsp;</small></div>
         <span class="tag n" id="rp-state">idle</span>
-        <button class="btn q sm yt save" id="rp-save" title="Save audio" hidden><svg class="i"><use href="#i-dl"/></svg></button>
+        <button class="btn q sm yt save" id="rp-save" title="Save audio or video" hidden><svg class="i"><use href="#i-dl"/></svg></button>
         <a class="btn q sm yt" id="rp-yt" target="_blank" rel="noopener" title="Open on YouTube" hidden><svg class="i"><use href="#i-ext"/></svg></a>
         <button class="btn q skip" id="rp-prev" title="Previous song" hidden><svg class="i"><use href="#i-prev"/></svg></button>
         <button class="btn q" id="rp-pp" title="Play / pause (K)" disabled><svg class="i"><use href="#i-play"/></svg></button>
@@ -830,7 +845,7 @@ function renderLists() {
   box.innerHTML =
     `<div class="plhead"><button class="back" id="rp-plback">← Playlists</button></div>` +
     `<div class="plhead"><span class="nm" id="rp-plnm" title="Click to rename">${esc(p.name)}</span>` +
-    (APP && p.songs.length ? `<button class="btn q sm" id="rp-plsave" title="Save every song's audio, into its own folder">${saveAllLabel(p)}</button>` : "") +
+    (APP && p.songs.length ? `<button class="btn q sm" id="rp-plsave" title="Save every song as audio or video, into its own folder">${saveAllLabel(p)}</button>` : "") +
     `<button class="btn q sm${playingHere && q.shuffle ? " on" : ""}" id="rp-plshuf" title="Play in a random order"${p.songs.length ? "" : " disabled"}><svg class="i"><use href="#i-shuffle"/></svg>Shuffle</button>` +
     `<button class="btn sm" id="rp-plplay"${p.songs.length ? "" : " disabled"}><svg class="i"><use href="#i-play"/></svg>Play</button></div>` +
     (p.songs.length ? `<ul class="list" id="rp-pl">` + p.songs.map((s, i) =>
@@ -847,7 +862,7 @@ function renderLists() {
   $("rp-plshuf").onclick = () => playList(p.id, null, true);
   $("rp-plnm").onclick = () => renameList(p);
   $("rp-pldel").onclick = () => deleteList(p);
-  if ($("rp-plsave")) $("rp-plsave").onclick = () => saveAudio(p.songs.map(s => ({id: s.id, title: s.title || ""})), p.name, p.id);
+  if ($("rp-plsave")) $("rp-plsave").onclick = () => saveMenu($("rp-plsave"), p.songs.map(s => ({id: s.id, title: s.title || ""})), p.name, p.id);
   const ul = $("rp-pl");
   if (ul) {
     ul.onclick = e => {
@@ -934,13 +949,15 @@ function addMenu(btn, v) {
   m.innerHTML = `<div class="mh">Add to…</div>` +
     lists.map(p => `<button data-to="${esc(p.id)}" title="${esc(p.name)}">${esc(p.name)}</button>`).join("") +
     `<form id="rp-mnew"><input id="rp-mname" maxlength="60" placeholder="New playlist"><button class="btn q sm" type="submit">Add</button></form>` +
-    (APP ? `<hr><button id="rp-msave">${isSaved(v.id) ? "✓ Saved: show the file" : jobOf(v.id) && jobOf(v.id).state === "saving" ? "Saving…" : "⤓ Save audio"}</button>` : "");
+    (APP ? `<hr>` + KINDS.map(k => `<button data-msave="${k}">${isSaved(v.id, k) ? `✓ ${k === "video" ? "Video" : "Audio"} saved: show the file`
+      : busyJob(jobOf(v.id, k)) ? `Saving the ${k}…` : `⤓ Save ${k}`}</button>`).join("") : "");
   m.className = "menu";
-  if (APP) $("rp-msave").onclick = () => { closeMenu(); isSaved(v.id) ? host({cmd: "audio-show", id: v.id}) : startSave(btn, [{id: v.id, title: v.title || ""}]); };
-  const r = btn.getBoundingClientRect();
-  m.hidden = false;
-  m.style.left = Math.max(8, Math.min(innerWidth - m.offsetWidth - 8, r.right - m.offsetWidth)) + "px";
-  m.style.top = (r.bottom + 4 + m.offsetHeight > innerHeight ? Math.max(8, r.top - m.offsetHeight - 4) : r.bottom + 4) + "px";
+  if (APP) m.querySelectorAll("[data-msave]").forEach(b => b.onclick = () => {
+    const k = b.dataset.msave; closeMenu();
+    if (isSaved(v.id, k)) host({cmd: "audio-show", id: v.id, kind: k});
+    else if (!busyJob(jobOf(v.id, k))) saveAudio([{id: v.id, title: v.title || ""}], "", null, k);
+  });
+  placeMenu(m, btn);
   const add = async pid => {
     closeMenu();
     try {
@@ -961,68 +978,88 @@ function addMenu(btn, v) {
 }
 
 /* ======================================================================
-   Save audio (S1, Monkey's picks 2026-11-01, mockups/save-audio-options.html):
-   an icon button beside "Open on YouTube", "Save audio" in each row's + menu,
-   "Save all" in a playlist. The app does the work (AudioSaver.cs: yt-dlp +
-   ffmpeg, fetched on the first save); this page asks, then polls while
-   something is saving. Desktop app only: the phone version has nothing to
-   run yt-dlp on.
+   Save audio or video. Save audio (S1, Monkey's picks 2026-11-01,
+   mockups/save-audio-options.html) became one button for both (V1, Monkey's
+   pick 2026-11-15, mockups/save-video-options.html): a click on the button
+   beside "Open on YouTube" opens a small menu, Audio (MP3/M4A/Opus) or Video
+   (MP4 up to 1080p), plus "Formats and folders…". Each row's + menu has "Save
+   audio" and "Save video"; a playlist's Save all asks which. The app does the
+   work (AudioSaver.cs: yt-dlp + ffmpeg, fetched on the first save); this page
+   asks, then polls while something is saving. Desktop app only: the phone
+   version has nothing to run yt-dlp on.
    ====================================================================== */
-let audio = {saved: [], jobs: {}, format: "mp3", chosen: false, folder: "", busy: false, tools: null};
-let audioTimer = null, saveBatch = null;      // saveBatch = {pid, ids} while a Save all runs
-const isSaved = id => audio.saved.includes(id);
-const jobOf = id => audio.jobs[id];
+let audio = {saved: {audio: [], video: []}, jobs: {}, format: "mp3", folder: "", quality: "1080", videoFolder: "", busy: false, tools: null};
+let audioTimer = null, saveBatch = null;      // saveBatch = {pid, kind, ids} while a Save all runs
+const KINDS = ["audio", "video"];
+const isSaved = (id, kind) => kind ? (audio.saved[kind] || []).includes(id) : KINDS.some(k => isSaved(id, k));
+const jobOf = (id, kind) => kind ? audio.jobs[kind + ":" + id]
+  : KINDS.map(k => audio.jobs[k + ":" + id]).find(j => j && (j.state === "saving" || j.state === "waiting"));
+const busyJob = j => !!j && (j.state === "saving" || j.state === "waiting");
 const FORMATS = {mp3: "MP3", m4a: "M4A", opus: "Opus"};
+const QUALITIES = {"720": "720p", "1080": "1080p", best: "Best"};
 const fmtMB = b => (b / 1048576).toFixed(1) + " MB";
+const shortDir = p => (p || "").split(/[\\/]/).filter(Boolean).slice(-2).join("\\");
+const kindLabel = k => k === "video" ? "video" : "audio";
+const kindDesc = k => k === "video"
+  ? `MP4 · up to ${QUALITIES[audio.quality] || audio.quality} · ${shortDir(audio.videoFolder)}`
+  : `${FORMATS[audio.format] || audio.format} · ${shortDir(audio.folder)}`;
+const lastKind = () => store.get("msRepeatSaveKind", "audio");
+/* a rough size for the song playing, from its length (measured 2026-11-15) */
+function estimate(kind) {
+  const d = ready && player && player.getDuration ? player.getDuration() : 0;
+  if (!d) return "";
+  const mbps = kind === "video" ? ({"720": 0.14, "1080": 0.21}[audio.quality] || 0) : audio.format === "mp3" ? 0.03 : 0.017;
+  return mbps ? "≈" + Math.max(1, Math.round(d * mbps)) + " MB" : "";
+}
 
 function savedNote(id, bare) {
   if (!APP) return "";
   const j = jobOf(id), sep = bare ? "" : " · ";
-  if (isSaved(id)) return `${sep}<span class="sv">✓ saved</span>`;
   if (j && j.state === "saving") return `${sep}<span class="sv run">saving…</span>`;
   if (j && j.state === "waiting") return `${sep}waiting`;
+  if (isSaved(id)) return `${sep}<span class="sv">✓ saved</span>`;
   return "";
 }
+const batchDone = () => saveBatch.ids.filter(id => isSaved(id, saveBatch.kind) || ["done", "error"].includes((jobOf(id, saveBatch.kind) || {}).state)).length;
 function saveAllLabel(p) {
-  const ids = p.songs.map(s => s.id);
   if (saveBatch && saveBatch.pid === p.id) {
-    const done = saveBatch.ids.filter(id => isSaved(id) || ["done", "error"].includes((jobOf(id) || {}).state)).length;
+    const done = batchDone();
     if (done < saveBatch.ids.length) return `<svg class="i"><use href="#i-dl"/></svg>Save all · ${done} / ${saveBatch.ids.length}`;
   }
-  return ids.every(isSaved) ? `<svg class="i"><use href="#i-ok"/></svg>All saved` : `<svg class="i"><use href="#i-dl"/></svg>Save all`;
+  return `<svg class="i"><use href="#i-dl"/></svg>Save all`;
 }
 
 function renderSaveBtn() {
   const b = $("rp-save"), id = cur && cur.id, j = id && jobOf(id);
-  const run = !!j && (j.state === "saving" || j.state === "waiting"), ok = !!id && isSaved(id);
-  b.classList.toggle("run", run); b.classList.toggle("ok", ok && !run);
-  b.innerHTML = `<svg class="i"><use href="#i-${ok && !run ? "ok" : "dl"}"/></svg>`;
-  b.title = run ? (j.state === "waiting" ? "Waiting to save" : audio.tools ? audio.tools.note : `Saving · ${j.pct}%`)
-    : ok ? "Saved: click to show the file. Right-click for format and folder."
-    : "Save audio. Right-click for format and folder.";
+  const run = busyJob(j), a = !!id && isSaved(id, "audio"), v = !!id && isSaved(id, "video");
+  const badge = run ? (j.kind === "video" ? "MP4" : FORMATS[j.format] || "") : a && v ? "2" : v ? "MP4" : a ? "♪" : "";
+  b.classList.toggle("run", run); b.classList.toggle("ok", (a || v) && !run);
+  b.innerHTML = `<svg class="i"><use href="#i-${(a || v) && !run ? "ok" : "dl"}"/></svg>` + (badge ? `<span class="badge">${badge}</span>` : "");
+  b.title = run ? (j.state === "waiting" ? `Waiting to save the ${kindLabel(j.kind)}` : audio.tools ? audio.tools.note : `Saving the ${kindLabel(j.kind)} · ${j.pct}%`)
+    : a && v ? "Audio and video saved" : a ? "Audio saved. Click to save the video too, or to show the file." : v ? "Video saved. Click to save the audio too, or to show the file."
+    : "Save audio or video";
 }
 
 function setAudio(d) {
   const before = audio.jobs || {};
   audio = d;
   // say what just finished: the saved file with Show, or why it failed
-  for (const [id, j] of Object.entries(d.jobs)) {
-    const was = before[id];
+  for (const [key, j] of Object.entries(d.jobs)) {
+    const was = before[key];
     if (!was || was.state === j.state) continue;
-    if (j.state === "done" && !(saveBatch && saveBatch.ids.includes(id) && d.busy)) {
-      showMsg(`Saved <b>${esc(j.title || id)}</b> · ${FORMATS[j.format] || j.format} · ${fmtMB(j.bytes)} <a href="#" id="rp-show">Show</a>`, false);
-      $("rp-show").onclick = e => { e.preventDefault(); host({cmd: "audio-show", id}); };
-    } else if (j.state === "error") showMsg(`Couldn't save <b>${esc(j.title || id)}</b>: ${esc(j.error)}`, true);
+    if (j.state === "done" && !(saveBatch && saveBatch.kind === j.kind && saveBatch.ids.includes(j.id) && d.busy)) {
+      showMsg(`Saved <b>${esc(j.title || j.id)}</b> · ${FORMATS[j.format] || j.format.toUpperCase()} · ${fmtMB(j.bytes)} <a href="#" id="rp-show">Show</a>`, false);
+      $("rp-show").onclick = e => { e.preventDefault(); host({cmd: "audio-show", id: j.id, kind: j.kind}); };
+    } else if (j.state === "error") showMsg(`Couldn't save <b>${esc(j.title || j.id)}</b>: ${esc(j.error)}`, true);
   }
   if (d.tools) showMsg(`${esc(d.tools.note)}…<span class="meter"><i style="width:${d.tools.pct}%"></i></span>`, false);
   else if (saveBatch && d.busy) {
     const p = listById(saveBatch.pid);
-    const done = saveBatch.ids.filter(id => isSaved(id) || ["done", "error"].includes((jobOf(id) || {}).state)).length;
-    showMsg(`Saving <b>${esc(p ? p.name : "the playlist")}</b>: ${done} of ${saveBatch.ids.length}`, false);
+    showMsg(`Saving <b>${esc(p ? p.name : "the playlist")}</b> as ${kindLabel(saveBatch.kind)}: ${batchDone()} of ${saveBatch.ids.length}`, false);
   } else if (saveBatch && !d.busy) {
-    const p = listById(saveBatch.pid), fails = saveBatch.ids.filter(id => (jobOf(id) || {}).state === "error").length;
-    showMsg(`Saved <b>${esc(p ? p.name : "the playlist")}</b>${fails ? ` (${fails} couldn't be saved)` : ""}. <a href="#" id="rp-show">Open the folder</a>`, !!fails);
-    $("rp-show").onclick = e => { e.preventDefault(); host({cmd: "audio-open"}); };
+    const p = listById(saveBatch.pid), kind = saveBatch.kind, fails = saveBatch.ids.filter(id => (jobOf(id, kind) || {}).state === "error").length;
+    showMsg(`Saved <b>${esc(p ? p.name : "the playlist")}</b> as ${kindLabel(kind)}${fails ? ` (${fails} couldn't be saved)` : ""}. <a href="#" id="rp-show">Open the folder</a>`, !!fails);
+    $("rp-show").onclick = e => { e.preventDefault(); host({cmd: "audio-open", kind}); };
     saveBatch = null;
   }
   renderSaveBtn(); renderRecent();
@@ -1034,52 +1071,72 @@ async function loadAudio() {
   try { const r = await api("/api/audio"); if (r.ok) setAudio(await r.json()); }
   catch (e) { /* lock notice already shown */ }
 }
-async function saveAudio(songs, sub, pid) {
-  songs = songs.filter(s => !isSaved(s.id));
-  if (!songs.length) return showMsg("Already saved.", false);
-  if (pid) saveBatch = {pid, ids: songs.map(s => s.id)};
-  try { setAudio(await post("/api/audio-save", {songs, sub: sub || ""})); }
+async function saveAudio(songs, sub, pid, kind) {
+  kind = kind || "audio";
+  store.set("msRepeatSaveKind", kind);
+  songs = songs.filter(s => !isSaved(s.id, kind));
+  if (!songs.length) return showMsg(`Already saved as ${kindLabel(kind)}.`, false);
+  if (pid) saveBatch = {pid, kind, ids: songs.map(s => s.id)};
+  try { setAudio(await post("/api/audio-save", {songs, sub: sub || "", kind})); }
   catch (err) { saveBatch = null; showMsg(`Couldn't save: ${esc(err.message)}`, true); }
 }
-/* the first save asks for format and folder; after that a click just saves */
-function startSave(anchor, songs) {
-  if (!audio.chosen) return audioPicker(anchor, songs);
-  saveAudio(songs);
-}
-
-/* format and folder: right-click the button, or the first save */
-function audioPicker(anchor, songs) {
-  const m = $("rp-menu");
-  let fmt = audio.format;
-  m.className = "menu audio";
-  m.innerHTML = `<span class="k mh">Save audio as</span>` +
-    `<div class="seg" id="rp-afmt">${Object.entries(FORMATS).map(([k, n]) => `<button data-f="${k}"${k === fmt ? ' class="on"' : ""}>${n}</button>`).join("")}</div>` +
-    `<span class="k mh">To</span>` +
-    `<div class="path"><span id="rp-afolder" title="${esc(audio.folder)}">${esc(audio.folder)}</span><button id="rp-achange">Change</button></div>` +
-    `<div class="acts"><button class="btn q sm" id="rp-aopen">Open folder</button><button class="btn sm" id="rp-ago">Save</button></div>`;
-  m.querySelectorAll("[data-f]").forEach(b => b.onclick = () => {
-    fmt = b.dataset.f; m.querySelectorAll("[data-f]").forEach(x => x.classList.toggle("on", x === b)); });
-  $("rp-achange").onclick = () => host({cmd: "audio-folder"});
-  $("rp-aopen").onclick = () => host({cmd: "audio-open"});
-  $("rp-ago").onclick = async () => {
-    closeMenu();
-    try { setAudio(await post("/api/audio-format", {format: fmt})); } catch (err) { showMsg(esc(err.message), true); return; }
-    if (songs && songs.length) saveAudio(songs);
-  };
+function placeMenu(m, anchor) {
   const r = anchor.getBoundingClientRect();
   m.hidden = false;
   m.style.left = Math.max(8, Math.min(innerWidth - m.offsetWidth - 8, r.right - m.offsetWidth)) + "px";
   m.style.top = (r.bottom + 4 + m.offsetHeight > innerHeight ? Math.max(8, r.top - m.offsetHeight - 4) : r.bottom + 4) + "px";
 }
+
+/* V1: the button's menu, Audio or Video. A kind already saved shows ✓ and
+   opens its file; one saving shows its progress. songs/sub/pid: what to save
+   (the song playing, or a whole playlist for Save all). */
+function saveMenu(anchor, songs, sub, pid) {
+  const m = $("rp-menu"), one = songs.length === 1 ? songs[0].id : null, last = lastKind();
+  m.className = "menu savek";
+  m.innerHTML = KINDS.map(k => {
+    const j = one && jobOf(one, k), ok = one && isSaved(one, k), run = busyJob(j);
+    const name = (pid ? "Save all as " : "") + (k === "video" ? (pid ? "video" : "Video") : (pid ? "audio" : "Audio"));
+    const right = ok ? "✓ Show" : run ? (j.state === "waiting" ? "waiting" : j.pct + "%") : one ? estimate(k) : "";
+    return `<button data-k="${k}" class="${k === last ? "f" : ""}${ok ? " done" : ""}"${run ? " disabled" : ""}>` +
+      `<svg class="i"><use href="#i-${k === "video" ? "film" : "note"}"/></svg>` +
+      `<span><b>${name}</b><small>${esc(kindDesc(k))}</small></span><em>${right}</em></button>`;
+  }).join("") + `<hr><button class="set" id="rp-kset">Formats and folders…</button>`;
+  m.querySelectorAll("[data-k]").forEach(b => b.onclick = () => {
+    const k = b.dataset.k; closeMenu();
+    if (one && isSaved(one, k)) return host({cmd: "audio-show", id: one, kind: k});
+    saveAudio(songs, sub, pid, k);
+  });
+  $("rp-kset").onclick = () => audioPicker(anchor);
+  placeMenu(m, anchor);
+}
+
+/* formats and folders: "Formats and folders…" in the menu, or right-click the button */
+function audioPicker(anchor) {
+  const m = $("rp-menu");
+  let fmt = audio.format, qual = audio.quality;
+  m.className = "menu audio";
+  m.innerHTML = `<span class="k mh">Audio</span>` +
+    `<div class="seg" id="rp-afmt">${Object.entries(FORMATS).map(([k, n]) => `<button data-f="${k}"${k === fmt ? ' class="on"' : ""}>${n}</button>`).join("")}</div>` +
+    `<div class="path"><span id="rp-afolder" title="${esc(audio.folder)}">${esc(audio.folder)}</span><button data-change="audio">Change</button></div>` +
+    `<span class="k mh">Video, MP4 up to</span>` +
+    `<div class="seg" id="rp-vq">${Object.entries(QUALITIES).map(([k, n]) => `<button data-q="${k}"${k === qual ? ' class="on"' : ""}>${n}</button>`).join("")}</div>` +
+    `<div class="path"><span id="rp-vfolder" title="${esc(audio.videoFolder)}">${esc(audio.videoFolder)}</span><button data-change="video">Change</button></div>` +
+    `<div class="acts"><button class="btn q sm" id="rp-aopen">Open folder</button><button class="btn sm" id="rp-ago">Save</button></div>`;
+  m.querySelectorAll("[data-f]").forEach(b => b.onclick = () => {
+    fmt = b.dataset.f; m.querySelectorAll("[data-f]").forEach(x => x.classList.toggle("on", x === b)); });
+  m.querySelectorAll("[data-q]").forEach(b => b.onclick = () => {
+    qual = b.dataset.q; m.querySelectorAll("[data-q]").forEach(x => x.classList.toggle("on", x === b)); });
+  m.querySelectorAll("[data-change]").forEach(b => b.onclick = () => host({cmd: "audio-folder", kind: b.dataset.change}));
+  $("rp-aopen").onclick = () => host({cmd: "audio-open", kind: lastKind()});
+  $("rp-ago").onclick = async () => {
+    closeMenu();
+    try { setAudio(await post("/api/audio-format", {format: fmt, quality: qual})); } catch (err) { showMsg(esc(err.message), true); }
+  };
+  placeMenu(m, anchor);
+}
 const curSong = () => cur ? [{id: cur.id, title: cur.title || ""}] : [];
-$("rp-save").onclick = () => {
-  if (!cur) return;
-  const j = jobOf(cur.id);
-  if (j && (j.state === "saving" || j.state === "waiting")) return;
-  if (isSaved(cur.id)) return host({cmd: "audio-show", id: cur.id});
-  startSave($("rp-save"), curSong());
-};
-$("rp-save").oncontextmenu = e => { e.preventDefault(); audioPicker($("rp-save"), isSaved(cur && cur.id) ? [] : curSong()); };
+$("rp-save").onclick = () => { if (cur) saveMenu($("rp-save"), curSong()); };
+$("rp-save").oncontextmenu = e => { e.preventDefault(); audioPicker($("rp-save")); };
 
 /* ---- compact mode: the player cell floats and drags; position kept per browser ---- */
 const card = $("card");
@@ -1279,12 +1336,13 @@ if (APP) {
     m.v.forEach((x, i) => { if (bars.children[i]) bars.children[i].style.height = Math.round(Math.max(.06, x) * 100) + "%"; loud = Math.max(loud, x); });
     bars.classList.toggle("quiet", loud < .02);
   });
-  // save audio: the folder the window's picker settled on
+  // save audio / video: the folder the window's picker settled on
   window.chrome.webview.addEventListener("message", e => {
     const m = e.data;
     if (!m || m.cmd !== "audio-folder") return;
-    audio.folder = m.folder;
-    if ($("rp-afolder")) { $("rp-afolder").textContent = m.folder; $("rp-afolder").title = m.folder; }
+    const video = m.kind === "video", el = $(video ? "rp-vfolder" : "rp-afolder");
+    if (video) audio.videoFolder = m.folder; else audio.folder = m.folder;
+    if (el) { el.textContent = m.folder; el.title = m.folder; }
   });
   loadAudio();
   setPin(store.get("msRepeatPin", true));

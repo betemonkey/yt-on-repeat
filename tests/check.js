@@ -207,19 +207,37 @@ const call = (ev, method, url, body) => ev(`fetch(${JSON.stringify(url)}, {metho
     check("after the last song it starts again from the first", r.wrapped.firstAgain && r.wrapped.pos === `1 / ${r.order.length}`, r.wrapped);
     check("playing one video yourself leaves Playlist mode", !r.single.listMode && !r.single.prevShown && !r.single.posShown, r.single);
 
-    // ---- save audio (2026-11-01): the parts that need no download ----
+    // ---- save audio (2026-11-01) and video (2026-11-15): the parts that need no download ----
     r = await call(s.ev, "GET", "/api/audio");
-    check("save audio starts as MP3, not chosen, nothing saved, idle",
-      r.status === 200 && r.body.format === "mp3" && r.body.chosen === false && r.body.saved.length === 0 && r.body.busy === false, r);
+    check("saving starts as MP3 and 1080p video, nothing saved, idle",
+      r.status === 200 && r.body.format === "mp3" && r.body.quality === "1080" && r.body.saved.audio.length === 0
+        && r.body.saved.video.length === 0 && r.body.busy === false && /On repeat$/.test(r.body.videoFolder), r);
     r = await call(s.ev, "POST", "/api/audio-format", {format: "wav"});
-    const fmtAfter = (await call(s.ev, "GET", "/api/audio")).body.format;
-    check("an unknown audio format is refused and changes nothing", r.status === 400 && fmtAfter === "mp3", {r, fmtAfter});
+    let after = (await call(s.ev, "GET", "/api/audio")).body;
+    check("an unknown audio format is refused and changes nothing", r.status === 400 && after.format === "mp3", {r, after: after.format});
+    r = await call(s.ev, "POST", "/api/audio-format", {quality: "8k"});
+    after = (await call(s.ev, "GET", "/api/audio")).body;
+    check("an unknown video quality is refused and changes nothing", r.status === 400 && after.quality === "1080", {r, after: after.quality});
+    r = await call(s.ev, "POST", "/api/audio-format", {quality: "720"});
+    const r2 = await call(s.ev, "POST", "/api/audio-format", {quality: "1080"});
+    check("the video quality can be changed, leaving the audio format alone",
+      r.status === 200 && r.body.quality === "720" && r.body.format === "mp3" && r2.body.quality === "1080", {r, r2});
     r = await call(s.ev, "POST", "/api/audio-save", {songs: [{id: "../../evil", title: "x"}, {id: "", title: ""}]});
-    check("bad video ids are never queued for saving", r.status === 200 && Object.keys(r.body.jobs).length === 0 && !r.body.busy, r);
-    r = await s.ev(`({shown: !$("rp-save").hidden, tip: $("rp-save").title, inMenu: (() => { $("rp-recent").querySelector("[data-add]").click();
-      const t = ($("rp-msave") || {}).textContent; closeMenu(); return t; })()})`);
-    check("the save button shows beside the video, and Save audio is in the + menu",
-      r.shown && /^Save audio/.test(r.tip) && r.inMenu === "⤓ Save audio", r);
+    const rv = await call(s.ev, "POST", "/api/audio-save", {songs: [{id: "../../evil", title: "x"}], kind: "video"});
+    check("bad video ids are never queued for saving, audio or video",
+      r.status === 200 && Object.keys(r.body.jobs).length === 0 && !r.body.busy && rv.status === 200 && Object.keys(rv.body.jobs).length === 0, {r, rv});
+    r = await call(s.ev, "POST", "/api/audio-save", {songs: [{id: "dQw4w9WgXcQ", title: "x"}], kind: "exe"});
+    check("an unknown save kind is refused", r.status === 400, r);
+    r = await s.ev(`({shown: !$("rp-save").hidden, tip: $("rp-save").title,
+      menu: (() => { $("rp-save").click(); const m = $("rp-menu");
+        const t = {kinds: [...m.querySelectorAll("[data-k]")].map(b => b.dataset.k), sub: [...m.querySelectorAll("[data-k] small")].map(x => x.textContent),
+          set: !!$("rp-kset")}; closeMenu(); return t; })(),
+      inMenu: (() => { $("rp-recent").querySelector("[data-add]").click();
+        const t = [...$("rp-menu").querySelectorAll("[data-msave]")].map(b => b.textContent); closeMenu(); return t; })()})`);
+    check("the save button offers Audio or Video, and the + menu has Save audio and Save video",
+      r.shown && r.tip === "Save audio or video" && r.menu.kinds.join() === "audio,video" && r.menu.set
+        && /^MP3 · /.test(r.menu.sub[0]) && /^MP4 · up to 1080p · /.test(r.menu.sub[1])
+        && r.inMenu.join() === "⤓ Save audio,⤓ Save video", r);
 
     // ---- security review (2026-10-08): only the app's own page may use the API ----
     const before2 = (await call(s.ev, "GET", "/api/repeat")).body.total;

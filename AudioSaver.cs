@@ -25,13 +25,16 @@ sealed class AudioSaver(Settings settings)
     const string FfmpegUrl = "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/";
     const string FfmpegZip = "ffmpeg-master-latest-win64-gpl-shared.zip";
     public static readonly string[] Formats = ["mp3", "m4a", "opus"];
+    public static readonly string[] Kinds = ["audio", "video"];
+    public static readonly string[] Qualities = ["720", "1080", "best"];
     static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(10) };
 
     readonly string tools = Settings.DataDir("tools");
-    readonly string savedFile = Path.Combine(Settings.Dir, "saved-audio.json");
+    // which video went to which file, one record per kind (saved-audio.json, saved-video.json)
+    static string SavedFile(string kind) => Path.Combine(Settings.Dir, $"saved-{kind}.json");
     readonly Lock gate = new();
     readonly List<Job> queue = [];
-    readonly Dictionary<string, Job> jobs = [];      // this run's saves, by video id
+    readonly Dictionary<string, Job> jobs = [];      // this run's saves, by "kind:id"
     bool running;
     Process? current;                                // the yt-dlp running now, stopped when the app closes
     string toolsNote = "";                           // "Getting the audio tools… 40%" while that runs
@@ -39,7 +42,8 @@ sealed class AudioSaver(Settings settings)
 
     sealed class Job
     {
-        public required string Id, Title, Sub;
+        public required string Id, Title, Sub, Kind;
+        public int Stage;                            // video: 0 = the picture stream, 1 = the sound
         public string State = "waiting";             // waiting | saving | done | error
         public int Pct;
         public string File = "", Error = "";
@@ -50,18 +54,24 @@ sealed class AudioSaver(Settings settings)
     public string Folder => string.IsNullOrWhiteSpace(settings.AudioFolder)
         ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyMusic), "On repeat")
         : settings.AudioFolder;
+    public string VideoFolder => string.IsNullOrWhiteSpace(settings.VideoFolder)
+        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "On repeat")
+        : settings.VideoFolder;
+    public string FolderOf(string kind) => kind == "video" ? VideoFolder : Folder;
+    static string Key(string kind, string id) => kind + ":" + id;
 
     // ---------- what the page sees ----------
 
     public JsonObject Status()
     {
-        var saved = LoadSaved();
+        var saved = Kinds.ToDictionary(k => k, LoadSaved);
         lock (gate)
         {
             var js = new JsonObject();
-            foreach (var j in jobs.Values)
-                js[j.Id] = new JsonObject
+            foreach (var (key, j) in jobs)
+                js[key] = new JsonObject
                 {
+                    ["id"] = j.Id, ["kind"] = j.Kind,
                     ["state"] = j.State, ["pct"] = j.Pct, ["error"] = j.Error,
                     ["title"] = j.Title, ["format"] = j.Format, ["bytes"] = j.Bytes,
                 };
@@ -70,37 +80,45 @@ sealed class AudioSaver(Settings settings)
                 ["format"] = settings.AudioFormat,
                 ["chosen"] = settings.AudioChosen,
                 ["folder"] = Folder,
+                ["quality"] = settings.VideoQuality,
+                ["videoFolder"] = VideoFolder,
                 ["busy"] = running,
                 ["tools"] = toolsNote.Length > 0 ? new JsonObject { ["note"] = toolsNote, ["pct"] = toolsPct } : null,
-                ["saved"] = new JsonArray([.. saved.Keys.Select(k => (JsonNode)k)]),
+                ["saved"] = new JsonObject(saved.Select(kv =>
+                    KeyValuePair.Create(kv.Key, (JsonNode?)new JsonArray([.. kv.Value.Keys.Select(k => (JsonNode)k)])))),
                 ["jobs"] = js,
             };
         }
     }
 
-    public JsonObject SetFormat(string format)
+    /// <summary>Audio format and/or video quality; a part left empty stays as it is.</summary>
+    public JsonObject SetFormat(string format, string quality)
     {
-        if (!Formats.Contains(format)) throw new ArgumentException("bad format");
-        settings.AudioFormat = format;
+        if (format.Length > 0 && !Formats.Contains(format)) throw new ArgumentException("bad format");
+        if (quality.Length > 0 && !Qualities.Contains(quality)) throw new ArgumentException("bad quality");
+        if (format.Length == 0 && quality.Length == 0) throw new ArgumentException("nothing to set");
+        if (format.Length > 0) settings.AudioFormat = format;
+        if (quality.Length > 0) settings.VideoQuality = quality;
         settings.AudioChosen = true;
         settings.Save();
         return Status();
     }
 
-    /// <summary>Queues saves. Songs already saved (their file still there) or
-    /// already queued are skipped; sub is a playlist's name, saved into its own
-    /// subfolder.</summary>
-    public JsonObject Save(IEnumerable<(string id, string title)> songs, string sub)
+    /// <summary>Queues saves of one kind, audio or video. Songs already saved
+    /// that way (their file still there) or already queued are skipped; sub is
+    /// a playlist's name, saved into its own subfolder.</summary>
+    public JsonObject Save(IEnumerable<(string id, string title)> songs, string sub, string kind)
     {
-        var saved = LoadSaved();
+        if (!Kinds.Contains(kind)) throw new ArgumentException("bad kind");
+        var saved = LoadSaved(kind);
         lock (gate)
         {
             foreach (var (id, title) in songs)
             {
                 if (!RepeatApi.IsVideoId(id) || saved.ContainsKey(id)) continue;
-                if (jobs.TryGetValue(id, out var old) && old.State is "waiting" or "saving") continue;
-                var j = new Job { Id = id, Title = title, Sub = SafeName(sub) };
-                jobs[id] = j;
+                if (jobs.TryGetValue(Key(kind, id), out var old) && old.State is "waiting" or "saving") continue;
+                var j = new Job { Id = id, Title = title, Sub = SafeName(sub), Kind = kind };
+                jobs[Key(kind, id)] = j;
                 queue.Add(j);
             }
             if (!running && queue.Count > 0) { running = true; _ = Task.Run(Run); }
@@ -120,7 +138,7 @@ sealed class AudioSaver(Settings settings)
     }
 
     /// <summary>The saved file of a video, for "Show" (never a path from the page).</summary>
-    public string? FileOf(string id) => LoadSaved().GetValueOrDefault(id);
+    public string? FileOf(string id, string kind) => Kinds.Contains(kind) ? LoadSaved(kind).GetValueOrDefault(id) : null;
 
     // ---------- the work ----------
 
@@ -155,22 +173,33 @@ sealed class AudioSaver(Settings settings)
 
     async Task SaveOne(Job j, string ytdlp, string? ffmpegDir)
     {
-        var format = settings.AudioFormat;
-        var dir = j.Sub.Length > 0 ? Path.Combine(Folder, j.Sub) : Folder;
+        var video = j.Kind == "video";
+        var format = video ? "mp4" : settings.AudioFormat;
+        var root = FolderOf(j.Kind);
+        var dir = j.Sub.Length > 0 ? Path.Combine(root, j.Sub) : root;
         Directory.CreateDirectory(dir);
         lock (gate) j.Format = format;
-        var args = new List<string>
+        var args = new List<string> { "--no-playlist", "--no-colors", "--newline", "--no-mtime", "--windows-filenames" };
+        if (video)
         {
-            "--no-playlist", "--no-colors", "--newline", "--no-mtime", "--windows-filenames",
+            // MP4 with H.264 picture and AAC sound up to the chosen height, so it
+            // plays everywhere; when only VP9/AV1 exists ("best" often) it goes in MKV
+            var h = settings.VideoQuality is "720" or "1080" ? $"[height<={settings.VideoQuality}]" : "";
+            args.AddRange(["-f", $"bv*{h}[vcodec^=avc1]+ba[ext=m4a]/bv*{h}[ext=mp4]+ba[ext=m4a]/bv*{h}+ba/b{h}/b",
+                "--merge-output-format", "mp4/mkv"]);
+        }
+        else
             // M4A and Opus take YouTube's own stream of that kind, so it is only
             // repackaged, never re-encoded; MP3 is always a conversion
-            "-f", format switch { "m4a" => "bestaudio[ext=m4a]/bestaudio", "opus" => "bestaudio[acodec=opus]/bestaudio", _ => "bestaudio/best" },
-            "-x", "--audio-format", format, "--audio-quality", "0",
+            args.AddRange(["-f", format switch { "m4a" => "bestaudio[ext=m4a]/bestaudio", "opus" => "bestaudio[acodec=opus]/bestaudio", _ => "bestaudio/best" },
+                "-x", "--audio-format", format, "--audio-quality", "0"]);
+        args.AddRange([
             "--embed-metadata", "--embed-thumbnail", "--convert-thumbnails", "jpg",
-            "--progress-template", "download:PCT %(progress._percent_str)s",
+            // --print makes yt-dlp quiet, which hides progress too; --progress brings it back
+            "--progress", "--progress-template", "download:PCT %(progress._percent_str)s",
             "--print", "after_move:FILE %(filepath)s",
             "-P", dir, "-o", "%(title)s.%(ext)s",
-        };
+        ]);
         if (ffmpegDir is not null) args.AddRange(["--ffmpeg-location", ffmpegDir]);
         args.Add($"https://www.youtube.com/watch?v={j.Id}");
 
@@ -195,7 +224,14 @@ sealed class AudioSaver(Settings settings)
         {
             if (line.StartsWith("PCT ") && double.TryParse(line[4..].Trim().TrimEnd('%'),
                     System.Globalization.CultureInfo.InvariantCulture, out var pct))
-                lock (gate) j.Pct = (int)Math.Clamp(pct * 0.95, 0, 95);    // the last 5% is converting
+                lock (gate)
+                {
+                    // a video is two downloads (picture, then sound): the second starts back at 0%
+                    if (video && j.Stage == 0 && pct < 20 && j.Pct >= 60) j.Stage = 1;
+                    j.Pct = !video ? (int)Math.Clamp(pct * 0.95, 0, 95)        // the last 5% is converting
+                        : j.Stage == 0 ? (int)Math.Clamp(pct * 0.8, 0, 80)
+                        : 80 + (int)Math.Clamp(pct * 0.15, 0, 15);
+                }
             else if (line.StartsWith("FILE ")) file = line[5..].Trim();
         }
         await p.WaitForExitAsync();
@@ -204,7 +240,7 @@ sealed class AudioSaver(Settings settings)
         if (p.ExitCode != 0 || file.Length == 0 || !File.Exists(file))
             throw new InvalidOperationException(err.Count > 0 ? Clip(err[^1]) : $"yt-dlp stopped (exit {p.ExitCode})");
         lock (gate) { j.File = file; j.Pct = 100; j.Bytes = new FileInfo(file).Length; }
-        Remember(j.Id, file);
+        Remember(j.Kind, j.Id, file);
     }
 
     // ---------- tools ----------
@@ -303,23 +339,24 @@ sealed class AudioSaver(Settings settings)
 
     // ---------- saved files ----------
 
-    Dictionary<string, string> LoadSaved()
+    Dictionary<string, string> LoadSaved(string kind)
     {
         try
         {
-            var d = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(savedFile)) ?? [];
+            var d = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(SavedFile(kind))) ?? [];
             return d.Where(kv => File.Exists(kv.Value)).ToDictionary();
         }
         catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException or JsonException) { return []; }
     }
 
-    void Remember(string id, string file)
+    void Remember(string kind, string id, string file)
     {
         lock (gate)
         {
-            var d = LoadSaved();
+            var d = LoadSaved(kind);
             d[id] = file;
             Directory.CreateDirectory(Settings.Dir);
+            var savedFile = SavedFile(kind);
             var tmp = savedFile + ".tmp";
             File.WriteAllText(tmp, JsonSerializer.Serialize(d, new JsonSerializerOptions { WriteIndented = true }));
             File.Move(tmp, savedFile, overwrite: true);

@@ -59,15 +59,22 @@ Recent, search) leaves Playlist mode; the app reopens on the playlist where it
 was. Counts are never stored in a playlist: a song's loops are the same
 whichever list played it.
 
-**Save audio (Monkey's picks, 2026-11-01, `mockups/save-audio-options.html`):**
-the download button beside "Open on YouTube" saves the song playing as an
-audio file with its title, channel and cover art (S1). The **+** menu on a
-Recent or search row has "Save audio" too, and a playlist has **Save all**, into
-its own subfolder (songs already saved are skipped). The first save asks for
-the format, MP3 (default), M4A or Opus, and the folder (`Music\On repeat`);
-right-click the button to change them later. M4A and Opus keep YouTube's own
-stream, so they're repackaged, not re-encoded. A saved song shows ✓; clicking
-it opens the folder with the file selected. The app does this with
+**Save audio or video (Monkey's picks: audio 2026-11-01,
+`mockups/save-audio-options.html`; video 2026-11-15, V1 in
+`mockups/save-video-options.html`):** the download button beside "Open on
+YouTube" opens a small menu: **Audio** (MP3 by default, or M4A / Opus, into
+`Music\On repeat`) or **Video** (MP4 up to 1080p by default, or 720p / Best,
+into `Videos\On repeat`), each with a rough size for the song playing. Files
+get the title, channel and cover art. "Formats and folders…" in that menu (or
+a right-click on the button) changes the format, quality and folders. The
+**+** menu on a Recent or search row has "Save audio" and "Save video", and a
+playlist's **Save all** asks which, into its own subfolder (songs already saved
+that way are skipped). M4A and Opus keep YouTube's own stream, so they're
+repackaged, not re-encoded. Video is H.264 + AAC in MP4 so it plays everywhere;
+when a video only exists as VP9/AV1 (sometimes with "Best") it's saved as MKV.
+The button shows ✓ once something is saved, with a small badge: ♪ audio, MP4
+video, 2 both; in the menu a saved kind shows "✓ Show", which opens the folder
+with the file selected. The app does this with
 [yt-dlp](https://github.com/yt-dlp/yt-dlp) and ffmpeg, downloaded on the first
 save (about 115 MB, once) rather than shipped with the app; an ffmpeg already on
 PATH is used instead. yt-dlp updates itself before a save once it's a week old.
@@ -146,7 +153,7 @@ from the same PC.
 | Counts, last played, recent | `%APPDATA%\RepeatDesktop\repeat-counts.json` |
 | Window positions, pin, YouTube key | `%APPDATA%\RepeatDesktop\settings.json` |
 | The page's own memory (A–B points, theme, fold) | WebView2 profile, `%LOCALAPPDATA%\RepeatDesktop\WebView2` |
-| Saved audio: which song went to which file | `%APPDATA%\RepeatDesktop\saved-audio.json` |
+| Saved audio / video: which song went to which file | `%APPDATA%\RepeatDesktop\saved-audio.json`, `saved-video.json` |
 | yt-dlp and ffmpeg (fetched on the first save) | `%LOCALAPPDATA%\RepeatDesktop\tools` |
 
 `REPEAT_DESKTOP_DATA=<folder>` moves all of these somewhere else; the checks use it
@@ -169,7 +176,7 @@ the key. The app checks the key with Google before saving it. Free quota is
   routes and rules the NAS version had: a loop adds a small positive step (≤ 500),
   a play adds nothing but stamps the order, the total is always the sum, and a
   damaged counts file is reported, never overwritten.
-- `AudioSaver.cs`: Save audio. Fetches yt-dlp and ffmpeg on first use, runs
+- `AudioSaver.cs`: Save audio and video. Fetches yt-dlp and ffmpeg on first use, runs
   one save at a time, reports progress to the page (`/api/audio`,
   `/api/audio-save`, `/api/audio-format`), and remembers what was saved.
 - `MainForm.cs`: the window. The page posts `mode` / `height` / `pin` / `drag`;
@@ -190,12 +197,13 @@ dotnet build -c Release
 node tests/check.js
 ```
 
-Starts the app on a throwaway data folder, runs 38 checks over WebView2's
+Starts the app on a throwaway data folder, runs 41 checks over WebView2's
 DevTools port (counting rules, refused inputs, 8 parallel tabs × 25 loops, search
 without a key, a wrong key refused by Google, the key guide, oEmbed titles, a
-damaged counts file, Save audio's settings and refused inputs), and closes it.
+damaged counts file, Save audio/video settings, the Audio/Video menu and refused inputs), and closes it.
 The checks never download the audio tools; a real save was tested by hand
-(2026-11-01: MP3 and M4A, tags and cover art, Save all into a subfolder). Needs internet for the YouTube parts.
+(2026-11-01: MP3 and M4A, tags and cover art, Save all into a subfolder;
+2026-11-15: MP4 at 1080p and 720p, H.264 + AAC with cover art, progress climbing). Needs internet for the YouTube parts.
 
 ## Design history
 

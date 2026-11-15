@@ -141,6 +141,10 @@ sealed class MainForm : Form
             Process.Start(new ProcessStartInfo(u.AbsoluteUri) { UseShellExecute = true });
     }
 
+    /// <summary>"video" or "audio" (the default) from a page message.</summary>
+    static string Kind(JsonElement m) =>
+        m.TryGetProperty("kind", out var k) && k.ValueKind == JsonValueKind.String && k.GetString() == "video" ? "video" : "audio";
+
     void OnPageMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
         // only the app's own page may move, resize or pin the window
@@ -168,26 +172,32 @@ sealed class MainForm : Form
                 settings.Pinned = m.GetProperty("on").GetBoolean();
                 TopMost = mini && settings.Pinned;
                 break;
-            // save audio: the folder picker and Explorer are this window's job
+            // save audio / video: the folder picker and Explorer are this window's job
             case "audio-folder":
-                using (var pick = new FolderBrowserDialog { Description = "Save audio to", UseDescriptionForTitle = true,
-                           InitialDirectory = api.Audio.Folder, ShowNewFolderButton = true })
+            {
+                var kind = Kind(m);
+                using (var pick = new FolderBrowserDialog { Description = kind == "video" ? "Save videos to" : "Save audio to",
+                           UseDescriptionForTitle = true, InitialDirectory = api.Audio.FolderOf(kind), ShowNewFolderButton = true })
                     if (pick.ShowDialog(this) == DialogResult.OK)
                     {
-                        settings.AudioFolder = pick.SelectedPath;
+                        if (kind == "video") settings.VideoFolder = pick.SelectedPath; else settings.AudioFolder = pick.SelectedPath;
                         settings.Save();
                     }
-                web.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(new { cmd = "audio-folder", folder = api.Audio.Folder }));
+                web.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(new { cmd = "audio-folder", kind, folder = api.Audio.FolderOf(kind) }));
                 break;
+            }
             case "audio-show":
                 // the file comes from the app's own record of saves, never from the page
-                if (m.TryGetProperty("id", out var sid) && api.Audio.FileOf(sid.GetString() ?? "") is { } f && File.Exists(f))
+                if (m.TryGetProperty("id", out var sid) && api.Audio.FileOf(sid.GetString() ?? "", Kind(m)) is { } f && File.Exists(f))
                     Process.Start("explorer.exe", $"/select,\"{f}\"");
                 break;
             case "audio-open":
-                Directory.CreateDirectory(api.Audio.Folder);
-                Process.Start(new ProcessStartInfo(api.Audio.Folder) { UseShellExecute = true });
+            {
+                var dir = api.Audio.FolderOf(Kind(m));
+                Directory.CreateDirectory(dir);
+                Process.Start(new ProcessStartInfo(dir) { UseShellExecute = true });
                 break;
+            }
             case "drag" when mini:
                 // the mini window has no OS title bar: hand the mouse to Windows
                 // as if it were on one, so it moves like any window
