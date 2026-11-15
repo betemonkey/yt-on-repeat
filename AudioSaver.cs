@@ -24,6 +24,11 @@ sealed class AudioSaver(Settings settings)
     const string YtDlpUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/";
     const string FfmpegUrl = "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/";
     const string FfmpegZip = "ffmpeg-master-latest-win64-gpl-shared.zip";
+    // yt-dlp needs a JavaScript runtime to get some YouTube videos ("This video
+    // is not available" without one, 2026-11-15): Deno or Node already on this
+    // PC, else Deno fetched like the other tools (yt-dlp's default runtime)
+    const string DenoUrl = "https://github.com/denoland/deno/releases/latest/download/";
+    const string DenoZip = "deno-x86_64-pc-windows-msvc.zip";
     public static readonly string[] Formats = ["mp3", "m4a", "opus"];
     public static readonly string[] Kinds = ["audio", "video"];
     public static readonly string[] Qualities = ["720", "1080", "best"];
@@ -156,8 +161,8 @@ sealed class AudioSaver(Settings settings)
             }
             try
             {
-                var (ytdlp, ffmpegDir) = await EnsureTools();
-                await SaveOne(j, ytdlp, ffmpegDir);
+                var (ytdlp, ffmpegDir, js) = await EnsureTools();
+                await SaveOne(j, ytdlp, ffmpegDir, js);
                 lock (gate) j.State = "done";
             }
             catch (Exception e)
@@ -171,7 +176,7 @@ sealed class AudioSaver(Settings settings)
         }
     }
 
-    async Task SaveOne(Job j, string ytdlp, string? ffmpegDir)
+    async Task SaveOne(Job j, string ytdlp, string? ffmpegDir, string js)
     {
         var video = j.Kind == "video";
         var format = video ? "mp4" : settings.AudioFormat;
@@ -179,7 +184,11 @@ sealed class AudioSaver(Settings settings)
         var dir = j.Sub.Length > 0 ? Path.Combine(root, j.Sub) : root;
         Directory.CreateDirectory(dir);
         lock (gate) j.Format = format;
-        var args = new List<string> { "--no-playlist", "--no-colors", "--newline", "--no-mtime", "--windows-filenames" };
+        // --encoding utf-8: yt-dlp otherwise prints the saved path in the Windows code
+        // page, which drops characters like the full-width colon --windows-filenames
+        // puts in place of ":" ("Sonic the Hedgehog: Memories…", 2026-11-15), and
+        // the save was reported as failed although the file was there
+        var args = new List<string> { "--encoding", "utf-8", "--no-playlist", "--no-colors", "--newline", "--no-mtime", "--windows-filenames" };
         if (video)
         {
             // MP4 with H.264 picture and AAC sound up to the chosen height, so it
@@ -201,6 +210,7 @@ sealed class AudioSaver(Settings settings)
             "-P", dir, "-o", "%(title)s.%(ext)s",
         ]);
         if (ffmpegDir is not null) args.AddRange(["--ffmpeg-location", ffmpegDir]);
+        args.AddRange(["--js-runtimes", js]);
         args.Add($"https://www.youtube.com/watch?v={j.Id}");
 
         var psi = new ProcessStartInfo(ytdlp)
@@ -245,7 +255,7 @@ sealed class AudioSaver(Settings settings)
 
     // ---------- tools ----------
 
-    async Task<(string ytdlp, string? ffmpegDir)> EnsureTools()
+    async Task<(string ytdlp, string? ffmpegDir, string js)> EnsureTools()
     {
         var ytdlp = Path.Combine(tools, "yt-dlp.exe");
         if (!File.Exists(ytdlp))
@@ -253,7 +263,8 @@ sealed class AudioSaver(Settings settings)
         else if (DateTime.UtcNow - File.GetLastWriteTimeUtc(ytdlp) > TimeSpan.FromDays(7))
             await SelfUpdate(ytdlp);
 
-        if (OnPath("ffmpeg.exe") is { } onPath && File.Exists(Path.Combine(onPath, "ffprobe.exe"))) return (ytdlp, null);
+        var js = await EnsureJs();
+        if (OnPath("ffmpeg.exe") is { } onPath && File.Exists(Path.Combine(onPath, "ffprobe.exe"))) return (ytdlp, null, js);
         var ffdir = Path.Combine(tools, "ffmpeg");
         if (!File.Exists(Path.Combine(ffdir, "ffmpeg.exe")) || !File.Exists(Path.Combine(ffdir, "ffprobe.exe")))
         {
@@ -274,7 +285,28 @@ sealed class AudioSaver(Settings settings)
             if (Directory.Exists(ffdir)) Directory.Delete(ffdir, true);
             Directory.Move(tmp, ffdir);
         }
-        return (ytdlp, ffdir);
+        return (ytdlp, ffdir, js);
+    }
+
+    /// <summary>The JavaScript runtime for yt-dlp, as its --js-runtimes value:
+    /// Deno or Node on PATH, else Deno fetched once into tools\deno.</summary>
+    async Task<string> EnsureJs()
+    {
+        if (OnPath("deno.exe") is { } d) return "deno:" + Path.Combine(d, "deno.exe");
+        if (OnPath("node.exe") is { } n) return "node:" + Path.Combine(n, "node.exe");
+        var deno = Path.Combine(tools, "deno", "deno.exe");
+        if (!File.Exists(deno))
+        {
+            var zip = Path.Combine(tools, DenoZip);
+            await Fetch(DenoZip, DenoUrl + DenoZip, DenoUrl + DenoZip + ".sha256sum", zip, "deno", 0, 100);
+            Directory.CreateDirectory(Path.GetDirectoryName(deno)!);
+            using (var a = ZipFile.OpenRead(zip))
+                (a.GetEntry("deno.exe") ?? throw new InvalidOperationException("deno.exe missing from its zip"))
+                    .ExtractToFile(deno + ".tmp", true);
+            File.Move(deno + ".tmp", deno, overwrite: true);
+            File.Delete(zip);
+        }
+        return "deno:" + deno;
     }
 
     /// <summary>Downloads url to dest, but keeps it only if its SHA-256 matches
@@ -284,6 +316,8 @@ sealed class AudioSaver(Settings settings)
         var sums = await Http.GetStringAsync(sumsUrl);
         var want = sums.Split('\n').Select(l => l.Trim().Split(' ', 2, StringSplitOptions.TrimEntries))
             .FirstOrDefault(x => x.Length == 2 && x[1].TrimStart('*') == name)?[0]
+            // a checksum file for this one file only (Deno's): its single SHA-256
+            ?? (sumsUrl.EndsWith(name + ".sha256sum") && Regex.Matches(sums, @"\b[0-9A-Fa-f]{64}\b") is { Count: 1 } one ? one[0].Value : null)
             ?? throw new InvalidOperationException($"no checksum published for {name}");
         using var r = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
         r.EnsureSuccessStatusCode();

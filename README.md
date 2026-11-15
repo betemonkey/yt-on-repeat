@@ -78,6 +78,10 @@ with the file selected. The app does this with
 [yt-dlp](https://github.com/yt-dlp/yt-dlp) and ffmpeg, downloaded on the first
 save (about 115 MB, once) rather than shipped with the app; an ffmpeg already on
 PATH is used instead. yt-dlp updates itself before a save once it's a week old.
+yt-dlp also needs a JavaScript runtime to get some videos (without one, YouTube
+answers "This video is not available"): a Deno or Node already on PATH is used,
+otherwise the app fetches [Deno](https://github.com/denoland/deno) once (about
+45 MB).
 Windows app only: the phone version has nothing to run yt-dlp on. The mini
 window has no save button.
 
@@ -154,7 +158,7 @@ from the same PC.
 | Window positions, pin, YouTube key | `%APPDATA%\RepeatDesktop\settings.json` |
 | The page's own memory (A–B points, theme, fold) | WebView2 profile, `%LOCALAPPDATA%\RepeatDesktop\WebView2` |
 | Saved audio / video: which song went to which file | `%APPDATA%\RepeatDesktop\saved-audio.json`, `saved-video.json` |
-| yt-dlp and ffmpeg (fetched on the first save) | `%LOCALAPPDATA%\RepeatDesktop\tools` |
+| yt-dlp, ffmpeg and Deno (fetched on the first save) | `%LOCALAPPDATA%\RepeatDesktop\tools` |
 
 `REPEAT_DESKTOP_DATA=<folder>` moves all of these somewhere else; the checks use it
 so they never touch the real counts.
@@ -229,7 +233,7 @@ Reviewed 2026-10-08; the checks cover each point.
   as are playlist names. Video ids are checked against YouTube's 11-character
   format on both sides.
 - **Save audio's tools are checked.** yt-dlp and ffmpeg come only from yt-dlp's
-  own GitHub releases, and each download is kept only if its SHA-256 matches the
+  own GitHub releases, Deno only from Deno's, and each download is kept only if its SHA-256 matches the
   checksum file published with it. "Show" opens the file the app itself
   recorded, never a path sent by the page, and a playlist's name is cleaned
   before it becomes a folder name.
